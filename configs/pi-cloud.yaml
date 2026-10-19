@@ -1,0 +1,23 @@
+# Paths are resolved by scripts/run-pi-cloud.py from the project root.
+model: models/agaeye_A_original_320_aug.onnx
+imgsz: 320
+threads: 2
+infer_fps: 3
+camera_size: [640, 480]
+conf_body: 0.2
+conf_airway: 0.15
+covered_without_body: true
+min_brightness: 40
+risk:
+  risk_threshold_s: 5.0
+  clear_threshold_s: 3.0
+  gap_tolerance_s: 1.0
+  miss_tolerance_s: 1.0
+server:
+  url: null
+  device_id: crib-01
+  heartbeat_s: 5.0  # Cloud offline detection: 20s; stale inference on the web: 12s.
+snapshot:
+  enabled: true
+  jpeg_quality: 75
+  max_width: 640

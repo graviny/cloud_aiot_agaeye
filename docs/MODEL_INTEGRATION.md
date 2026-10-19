@@ -1,5 +1,7 @@
 # 선택한 모델 저장소와 웹 연결하기
 
+이 문서는 원본 **로컬 개발 서버**의 연결 계약을 설명합니다. Supabase에 지속 저장하고 보호자 인증을 적용하는 클라우드 모드는 [클라우드 배포 안내](CLOUD_DEPLOYMENT.md)를 따릅니다.
+
 작성일: 2026-10-14
 
 대상: [wlsdn66597/aga-eye](https://github.com/wlsdn66597/aga-eye)
