@@ -1,5 +1,20 @@
 # 검증 기록
 
+## 2026-10-19 main 통합 브랜치 검증
+
+`integration/complete-agaeye`는 최신 main(`bc5d0c0`)에서 시작해 전체 기능이 포함된 PR #5 병합 결과(`338af91`)를 충돌 없이 합쳤습니다. 실행 코드는 검토된 전체 기능과 같고, 구조도·README 연결·통합 안내를 추가했습니다.
+
+| 검사 | 결과 |
+| --- | --- |
+| `npm.cmd run build` | TypeScript·Vite 빌드 통과 |
+| `npm.cmd test` | 39개 통과 |
+| `npm.cmd run test:cloud:api` | 11개 통과 |
+| `npm.cmd run test:e2e` | 6개 통과 |
+| `npm.cmd run test:agaeye` | 3개 통과 |
+| `npm.cmd run test:cloud` | 1개 통과 |
+
+자동 검증 총 60개를 통합 코드에서 다시 실행했습니다. 테스트 로그인·저장소는 대역이며, 실제 Supabase/RLS·Render 배포·Docker 이미지·라즈베리파이 하드웨어 검증은 포함하지 않습니다. main 병합과 실제 배포는 별도 단계입니다.
+
 작성일: 2026-10-13
 
 최종 프로젝트 위치는 **`C:\Users\user\Desktop\2026\SSU\AIOT`**입니다. 상대 경로 구조와 의존성을 유지하여 바탕화면의 지정 폴더로 이동했습니다.

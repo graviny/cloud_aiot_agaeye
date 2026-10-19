@@ -55,6 +55,7 @@ npm.cmd run test:agaeye
 
 ## 팀 문서
 
+- [전체 작동 구조와 위험 알림 흐름](docs/ARCHITECTURE.md)
 - [기능별 PR 검토·병합 순서](docs/PR_GUIDE.md)
 - [팀 개발 안내](docs/TEAM_GUIDE.md)
 - [클라우드 API](docs/CLOUD_API.md) · [보호자 웹](docs/CLOUD_WEB.md)
