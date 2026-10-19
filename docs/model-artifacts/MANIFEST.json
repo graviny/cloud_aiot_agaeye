@@ -1,0 +1,26 @@
+{
+  "archive_name": "aga-eye-model-v1.tar.gz",
+  "archive_sha256": "36d7b24dda008e138e030e05b530b9cc1d6740d74b5046723b393581f4a83e70",
+  "received_date": "2026-10-14",
+  "files": [
+    {
+      "archive_path": "models/agaeye_A_original_320_aug.onnx",
+      "project_path": "models/agaeye_A_original_320_aug.onnx",
+      "size": 12651058,
+      "sha256": "e2546caef8500e8aaa80b0edec071d77f3b0975daccf560416dc64e8ddc73352"
+    },
+    {
+      "archive_path": "runs/train/A_original_320_aug/weights/best.pt",
+      "project_path": "models/checkpoints/A_original_320_aug_best.pt",
+      "size": 6488618,
+      "sha256": "563ca62ba1e9330d3e8d39d5712721b20ad99550902b4099705e4b2b31e08b25"
+    },
+    {
+      "archive_path": "results/summary.csv",
+      "project_path": "docs/model-artifacts/summary.csv",
+      "size": 2067,
+      "sha256": "8f627fa85f9ce4eddb1a6e7862befaf3af3e5fa35af971f65b1c742580d552b4"
+    }
+  ],
+  "note": "User-supplied model. ONNX used for inference; .pt retained without deserialization."
+}
