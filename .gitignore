@@ -216,3 +216,31 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Aga Eye web, model and cloud development
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.env.cloud-server
+.env.pi
+aga-eye-web-team.zip
+aga-eye-cloud-team.zip
+cloud-backups/
+playwright-report/
+test-results/
+.npm-cache/
+
+# Local inference environment, weights, uploaded videos and preview frames
+.venv-ai/
+.venv-cloud/
+runtime/
+__pycache__/
+*.pyc
+models/**/*.onnx
+models/**/*.pt
+models/**/*_ncnn_model/
+# Generated browser verification captures
+docs/screenshots/
