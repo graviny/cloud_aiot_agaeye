@@ -1,0 +1,5 @@
+*
+!cloud/
+!cloud/**
+cloud/__pycache__/
+cloud/**/*.pyc

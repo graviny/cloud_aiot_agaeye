@@ -40,3 +40,7 @@ npm.cmd run test:e2e
 팀에서 받은 ONNX를 `models/agaeye_A_original_320_aug.onnx`에 복사하고 `setup-ai-demo.cmd`로 전용 Python 환경을 준비한 뒤 `start-ai-demo.cmd`로 실행합니다. CPU에서 웹캠·영상을 분석하며 모델 가중치는 저장소에 없습니다.
 
 [모델 데모 안내](docs/LAPTOP_AI_DEMO.md) · [모델 저장소·기기 API 연결](docs/MODEL_INTEGRATION.md)
+
+## 클라우드 API
+
+[Supabase 저장·인증 API 안내](docs/CLOUD_API.md)를 참고하세요. 실제 서비스 계정 연결과 배포는 별도 설정이 필요합니다.
