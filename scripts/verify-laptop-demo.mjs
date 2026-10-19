@@ -1,0 +1,36 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+if (!existsSync('runtime/check-input.avi')) execFileSync('.venv-ai/Scripts/python.exe', ['scripts/make-check-video.py']);
+import { chromium, expect } from '@playwright/test';
+const browser=await chromium.launch({channel:'msedge',headless:true,args:['--disable-gpu']});
+const page=await browser.newPage({viewport:{width:1280,height:1000}});
+let ownsAnalysis=false;
+const failures=[];page.on('pageerror',error=>failures.push(error.message));
+try {
+ await page.goto('http://127.0.0.1:5173/');
+ const panel=page.getByRole('region',{name:'노트북 실제 분석 데모'});
+ await expect(panel.getByRole('button',{name:'웹캠 시작',exact:true})).toBeEnabled();
+ const marker=await page.request.get('http://127.0.0.1:5173/__agaeye/laptop-demo');
+ expect((await marker.json()).app).toBe('aga-eye-laptop-demo');
+ ownsAnalysis=true;
+ await panel.getByLabel('분석할 영상 파일').setInputFiles('runtime/check-input.avi');
+ await expect(panel.getByText('check-input.avi 분석 중',{exact:true})).toBeVisible({timeout:15000});
+ await expect(panel.locator('img')).toBeVisible({timeout:15000});
+ await expect(page.getByRole('article',{name:'카메라: 정상 작동'})).toBeVisible({timeout:10000});
+ const device=await (await page.request.get('http://127.0.0.1:5173/agaeye-api/devices/laptop-demo/status')).json();
+ const info=await (await page.request.get('http://127.0.0.1:5173/agaeye-api/demo/info')).json();
+ expect(device.ts).toBeGreaterThan(0);expect(device.infer_ms).toBeGreaterThan(0);
+ expect(await panel.locator('img').evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
+ const duplicate=await page.request.post('http://127.0.0.1:5173/agaeye-api/demo/start',{data:{source:'camera',camera_index:0}});
+ expect(duplicate.status()).toBe(409);
+ await page.screenshot({path:'docs/screenshots/laptop-ai-demo.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth)).toBe(false);
+ await page.screenshot({path:'docs/screenshots/laptop-ai-mobile.png',fullPage:true});
+ await panel.getByRole('button',{name:'분석 중지',exact:true}).click();
+ await expect(panel.getByRole('button',{name:'웹캠 시작',exact:true})).toBeEnabled();
+ await expect(page.getByRole('article',{name:'카메라: 확인 불가'})).toBeVisible();
+ await expect(page.getByRole('article',{name:'위험 상태: 판단 불가'})).toBeVisible();
+ console.log(JSON.stringify({model:info.modelName,provider:info.provider,device,videoPreview:true,duplicateStart:duplicate.status(),stopped:true,mobileOverflow:false,pageErrors:failures},null,2));
+ expect(failures).toEqual([]);
+} finally { if(ownsAnalysis) await page.request.post('http://127.0.0.1:5173/agaeye-api/demo/stop'); await browser.close(); }

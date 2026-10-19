@@ -13,6 +13,19 @@
   --amber: #b45309;
   --neutral: #4b5563;
 }
+
+.cloud-login { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; padding: 36px 24px; max-width: 480px; margin: auto; }
+.cloud-login-brand { display: flex; align-items: center; gap: 12px; color: var(--green); font-size: 28px; font-weight: 700; margin-bottom: 38px; }
+.cloud-login h1 { font-size: 28px; line-height: 1.4; letter-spacing: -.045em; margin-bottom: 12px; }
+.cloud-login p { color: var(--muted); line-height: 1.7; }
+.cloud-login form { display: grid; gap: 22px; margin-top: 30px; }
+.cloud-login label { display: grid; gap: 9px; font-size: 15px; font-weight: 600; }
+.cloud-login input { width: 100%; min-height: 48px; border: 1px solid #94a3b8; border-radius: 4px; padding: 10px 12px; background: white; font-size: 16px; }
+.cloud-login form .button { min-height: 48px; justify-content: center; font-size: 16px; }
+.cloud-login p.cloud-login-error { color: var(--red); background: #fef2f2; padding: 12px; border-left: 3px solid var(--red); }
+.cloud-login p.cloud-login-note { font-size: 13px; margin-top: 28px; }
+.cloud-signout { white-space: nowrap; }
+@media (max-width: 640px) { .header-actions:has(.cloud-signout) .mode-label { display: none; } }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input, select { font: inherit; }
@@ -342,4 +355,26 @@ footer { display: flex; justify-content: space-between; gap: 16px; padding: 23px
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+.laptop-demo { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 19px 0; margin: -7px 0 28px; }
+.laptop-demo-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.laptop-demo-title { display: flex; flex-direction: column; gap: 3px; }
+.laptop-demo-title strong { font-size: 17px; }
+.laptop-demo-title span { font-size: 13px; color: var(--muted); }
+.laptop-demo-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.laptop-demo-controls select { min-width: 0; border: 1px solid #94a3b8; background: white; padding: 8px; border-radius: 4px; font-size: 14px; }
+.laptop-demo-controls .button { font-size: 14px; min-height: 42px; }
+.laptop-demo-note { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.laptop-demo-note p { display: flex; gap: 7px; align-items: center; }
+.laptop-demo-error { color: var(--red); font-size: 14px; white-space: pre-wrap; margin-top: 12px; }
+.laptop-preview { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 24px; margin-top: 16px; align-items: center; }
+.laptop-preview img { width: 100%; max-height: 280px; object-fit: contain; background: #17202b; }
+.laptop-preview strong { font-size: 16px; }
+.laptop-preview p { font-size: 14px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 600px) {
+  .laptop-demo-controls { width: 100%; }
+  .laptop-demo-controls select { width: 100%; }
+  .laptop-demo-controls .button { flex: 1 1 auto; padding: 8px 10px; }
+  .laptop-preview { grid-template-columns: 1fr; gap: 12px; }
 }

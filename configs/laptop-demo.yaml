@@ -1,0 +1,23 @@
+# Laptop demo: actual inference on CPU. Pi deployment keeps the upstream edge.yaml.
+model: models/agaeye.onnx
+imgsz: 320
+threads: 2
+infer_fps: 3
+camera_size: [640, 480]
+conf_body: 0.2
+conf_airway: 0.15
+covered_without_body: true
+min_brightness: 40
+risk:
+  risk_threshold_s: 5.0
+  clear_threshold_s: 3.0
+  gap_tolerance_s: 1.0
+  miss_tolerance_s: 1.0
+server:
+  url: null
+  device_id: laptop-demo
+  heartbeat_s: 2.0
+snapshot:
+  enabled: true
+  jpeg_quality: 80
+  max_width: 640
