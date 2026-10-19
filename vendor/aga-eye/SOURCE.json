@@ -1,0 +1,27 @@
+{
+    "files":  [
+                  "agaeye/__init__.py",
+                  "agaeye/classes.py",
+                  "agaeye/config.py",
+                  "agaeye/decision.py",
+                  "agaeye/detector_onnx.py",
+                  "agaeye/imaging.py",
+                  "agaeye/notify.py",
+                  "agaeye/risk.py",
+                  "agaeye/sources.py",
+                  "configs/edge.yaml",
+                  "server/__init__.py",
+                  "server/app.py",
+                  "server/static/index.html",
+                  "edge/run_edge.py",
+                  "LICENSE",
+                  "README.md",
+                  "requirements-edge.txt",
+                  "requirements-server.txt",
+                  "scripts/export_model.py"
+              ],
+    "note":  "Unmodified runtime subset. LICENSE retained. No model weights included.",
+    "retrieved":  "2026-10-14",
+    "commit":  "65d672cbbdc052b9e8ce1d08c2bcf9d96ba76fa3",
+    "repository":  "https://github.com/wlsdn66597/aga-eye"
+}

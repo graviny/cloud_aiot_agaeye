@@ -9,6 +9,7 @@ import { isSnapshotStale, localDate, timeLabel, visibleStatus } from './domain/m
 import { riskLabels } from './domain/types';
 import type { MonitorSnapshot, RiskEvent } from './domain/types';
 import { DemoPanel } from './components/DemoPanel';
+import { LaptopDemo } from './components/LaptopDemo';
 import { Modal } from './components/Modal';
 import { Photo } from './components/Photo';
 import { MonitorPhoto } from './components/MonitorPhoto';
@@ -154,6 +155,7 @@ export default function App() {
     </header>
     <div className="main-shell">
       <main id="main-content"><div className="page-heading"><div><h1>{page === 'monitor' ? '수면 모니터링' : page === 'history' ? '위험 이력' : '사용 안내'}</h1><p>{page === 'monitor' ? '아기의 현재 상태와 알림 사진을 함께 확인해요.' : page === 'history' ? '위험 발생 시점과 보호자 확인 기록입니다.' : '상태 표시와 알림을 읽는 방법입니다.'}</p></div><span className="today">{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(now)}</span></div>
+      {LOCAL_AI_DEMO && DATA_MODE === 'agaeye' && <LaptopDemo />}
       {(snapshot.error || stale || actionError) && <div className="connection-alert" role="alert"><WifiOff size={18} /><span>{actionError || (stale ? '상태 갱신이 중단됐어요. 마지막 수신 정보를 현재의 정상 상태로 해석하지 마세요.' : snapshot.error)}</span><button className="text-button" onClick={refresh}><RefreshCw size={14} />다시 확인</button></div>}
       {page === 'monitor' ? <>
         <div className={`home-monitor ${danger ? 'is-danger' : ''}`}>

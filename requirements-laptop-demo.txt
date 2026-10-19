@@ -1,0 +1,8 @@
+# Laptop CPU inference and local web API. No PyTorch or CUDA package is needed to run ONNX.
+onnxruntime>=1.17,<2
+numpy>=1.26,<3
+opencv-python>=4.8,<5
+pyyaml>=6,<7
+requests>=2.31,<3
+fastapi>=0.110,<1
+uvicorn>=0.29,<1
