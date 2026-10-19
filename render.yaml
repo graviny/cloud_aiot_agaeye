@@ -1,0 +1,56 @@
+# This Blueprint creates only free services. Configure the values marked sync:false.
+services:
+  - type: web
+    name: aga-eye-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: off
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GUARDIAN_USER_ID
+        sync: false
+      - key: DEVICE_TOKEN
+        generateValue: true
+      - key: DEVICE_ID
+        value: crib-01
+      - key: CORS_ORIGINS
+        sync: false
+  - type: web
+    name: aga-eye-web
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_VERSION
+        value: 24
+      - key: VITE_DATA_MODE
+        value: cloud
+      - key: VITE_DEVICE_ID
+        value: crib-01
+      - key: VITE_STALE_AFTER_MS
+        value: 12000
+      - key: VITE_API_BASE_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
