@@ -66,6 +66,6 @@ export function mapAgaEyeEvents(value: unknown, deviceId: string, baseUrl: strin
   if (!Array.isArray(value)) throw new Error('위험 이력 응답이 목록 형식이 아닙니다.');
   return value.filter(item => {
     if (!record(item) || typeof item.device_id !== 'string') throw new Error('위험 기록의 기기 ID가 없습니다.');
-    return item.device_id === deviceId;
+    return item.device_id === deviceId && item.metadata_complete !== false;
   }).map(item => mapAgaEyeEvent(item, baseUrl));
 }

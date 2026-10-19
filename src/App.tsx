@@ -13,6 +13,7 @@ import { LaptopDemo } from './components/LaptopDemo';
 import { Modal } from './components/Modal';
 import { Photo } from './components/Photo';
 import { MonitorPhoto } from './components/MonitorPhoto';
+import { authClient, CLOUD_MODE } from './data/cloudAuth';
 
 type Page = 'monitor' | 'history' | 'help';
 type Tone = 'green' | 'amber' | 'red' | 'neutral';
@@ -92,7 +93,7 @@ function HistoryPage({ snapshot, onSelect, onAcknowledge, busyId, onRefresh }: {
 function HelpPage() {
   return <div className="help-grid"><section className="panel"><div className="panel-heading"><div><h2>처음 사용하는 아가 아이</h2><p>현재 상태를 확인하고, 알림이 오면 아기를 직접 살펴보세요.</p></div><BookOpen size={22} /></div>
     <ol className="help-steps"><li><span>01</span><div><h3>연결과 분석 상태를 확인해요</h3><p>서버와 {LOCAL_AI_DEMO ? '노트북 분석 프로그램' : '라즈베리파이'} 연결, 카메라 입력이 정상인지 확인하세요. ‘판단 불가’는 ‘정상’과 다른 상태예요.</p></div></li><li><span>02</span><div><h3>위험 알림과 사진을 확인해요</h3><p>알림이 발생한 시각의 사진을 보여드려요. 실시간 영상이 아니며, 사진을 불러오지 못해도 텍스트 알림은 표시돼요.</p></div></li><li><span>03</span><div><h3>아기를 직접 확인하고 기록해요</h3><p>‘확인했어요’를 누르면 보호자 확인 시각이 남아요. 위험 종료는 분석 결과에 따라 별도로 갱신돼요.</p></div></li></ol>
-  </section><section className="panel help-note"><span className="eyebrow">사용 환경</span><h2>{DATA_MODE === 'mock' ? '로컬 데모 버전' : '로컬 기기 연결'}</h2>
+  </section><section className="panel help-note"><span className="eyebrow">사용 환경</span><h2>{CLOUD_MODE ? '클라우드 기기 연결' : DATA_MODE === 'mock' ? '로컬 데모 버전' : '로컬 기기 연결'}</h2>
     {DATA_MODE === 'mock' ? <><p>데모 모드에서는 실제 카메라와 AI 모델에 연결하지 않아요. 사진은 직접 그린 예시 이미지이고, 이력은 이 브라우저에 저장돼요.</p><p>화면 아래 개발용 패널에서 여러 상황을 선택해 동작을 확인할 수 있어요.</p></> : <><p>연결된 기기의 분석 결과와 위험 발생 당시 사진을 보여드려요. 사진이 없거나 연결이 끊기면 화면 안내를 확인해 주세요.</p><p>‘확인했어요’는 보호자의 확인 기록이며 위험 종료 판정과는 별개예요.</p></>}
     <p>웹을 닫은 상태의 PUSH 알림은 제공하지 않아요.</p>
   </section></div>;
@@ -135,6 +136,12 @@ export default function App() {
     catch (error) { setActionError(error instanceof Error ? error.message : '다시 불러오지 못했습니다.'); }
   };
   const navigate = (next: Page) => { setPage(next); setActionError(null); };
+  const signOut = async () => {
+    try {
+      const result = await authClient?.auth.signOut({ scope: 'local' });
+      if (result?.error) throw result.error;
+    } catch { setActionError('로그아웃하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+  };
   const connection = snapshot.transport === 'connected' ? status?.server || 'connected' : snapshot.transport;
   const connectionLabel = { connected: '연결됨', connecting: '연결 중', delayed: '응답 지연', disconnected: '연결 끊김' }[connection];
   const cameraLabel = !status ? '확인 중' : { ok: '정상 작동', error: '입력 오류', disconnected: '연결 끊김', unknown: '확인 불가' }[status.camera];
@@ -151,7 +158,7 @@ export default function App() {
     <header className="app-header">
       <a className="brand" href="#" onClick={event => { event.preventDefault(); navigate('monitor'); }} aria-label="아가 아이 모니터링 홈"><MoonStar size={28} /><span>아가 아이<small>수면 상태 모니터</small></span></a>
       <nav aria-label="주 메뉴">{pages.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${page === id ? 'active' : ''}`} aria-current={page === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={18} /><span>{label}</span>{id === 'history' && unread > 0 && <span className="nav-count">{unread}</span>}</button>)}</nav>
-      <div className="header-actions"><span className="mode-label">{DATA_MODE === 'mock' ? '데모 모드' : LOCAL_AI_DEMO ? '실제 모델 데모' : 'API 모드'}</span><button className="notification-button" aria-label={`미확인 위험 이력 ${unread}건 보기`} onClick={() => navigate('history')}><Bell size={20} />{unread > 0 && <span />}</button></div>
+      <div className="header-actions"><span className="mode-label">{CLOUD_MODE ? '클라우드 연결' : DATA_MODE === 'mock' ? '데모 모드' : LOCAL_AI_DEMO ? '실제 모델 데모' : 'API 모드'}</span>{CLOUD_MODE && <button className="text-button cloud-signout" onClick={() => { void signOut(); }}>로그아웃</button>}<button className="notification-button" aria-label={`미확인 위험 이력 ${unread}건 보기`} onClick={() => navigate('history')}><Bell size={20} />{unread > 0 && <span />}</button></div>
     </header>
     <div className="main-shell">
       <main id="main-content"><div className="page-heading"><div><h1>{page === 'monitor' ? '수면 모니터링' : page === 'history' ? '위험 이력' : '사용 안내'}</h1><p>{page === 'monitor' ? '아기의 현재 상태와 알림 사진을 함께 확인해요.' : page === 'history' ? '위험 발생 시점과 보호자 확인 기록입니다.' : '상태 표시와 알림을 읽는 방법입니다.'}</p></div><span className="today">{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(now)}</span></div>
@@ -172,7 +179,7 @@ export default function App() {
             <div className="connection-heading"><h2>연결 상태</h2><span className="update-note"><span className={`tiny-dot ${!stale && snapshot.transport === 'connected' ? 'green-dot' : ''}`} />마지막 수신 {timeLabel(snapshot.receivedAt)}</span></div>
             <div className="hardware-grid">
               <StatusCard title="카메라" value={cameraLabel} icon={Camera} tone={status?.camera === 'ok' ? 'green' : status?.camera === 'disconnected' || status?.camera === 'error' ? 'red' : 'neutral'} note={status?.camera === 'ok' ? '카메라 프레임 정상 수신' : '카메라 입력 상태를 확인해 주세요'} updatedAt={status?.lastFrameAt || null} />
-              <StatusCard title="서버 연결" value={connectionLabel} icon={Server} tone={connection === 'connected' ? 'green' : connection === 'disconnected' ? 'red' : connection === 'delayed' ? 'amber' : 'neutral'} note={DATA_MODE === 'mock' ? '노트북 API 연결 · 모의 상태' : '노트북 API와의 통신 상태예요'} updatedAt={snapshot.receivedAt} />
+              <StatusCard title="서버 연결" value={connectionLabel} icon={Server} tone={connection === 'connected' ? 'green' : connection === 'disconnected' ? 'red' : connection === 'delayed' ? 'amber' : 'neutral'} note={CLOUD_MODE ? '클라우드 API와의 통신 상태예요' : DATA_MODE === 'mock' ? '노트북 API 연결 · 모의 상태' : '노트북 API와의 통신 상태예요'} updatedAt={snapshot.receivedAt} />
             </div>
             <div className="device-meta"><span><span className={`tiny-dot ${status?.pi === 'connected' ? 'green-dot' : status?.pi === 'disconnected' ? 'red-dot' : status?.pi === 'delayed' ? 'amber-dot' : ''}`} />{LOCAL_AI_DEMO ? '노트북 분석' : '라즈베리파이'} {status?.pi === 'connected' ? '연결됨' : status?.pi === 'disconnected' ? '연결 끊김' : '확인 중'}</span><span><Activity size={14} />분석 {status?.analysis === 'running' ? '진행 중' : '확인 불가'}</span></div>
           </section>
@@ -184,7 +191,7 @@ export default function App() {
       </> : page === 'history' ? <HistoryPage snapshot={snapshot} onSelect={setSelectedId} onAcknowledge={acknowledge} busyId={busyId} onRefresh={refresh} /> : <HelpPage />}
       {DATA_MODE === 'mock' && <div className="demo-banner"><Info size={15} /><span><strong>모의 데이터로 실행 중이에요.</strong> 실제 카메라와 AI 모델은 연결되지 않았습니다.</span></div>}
       {DATA_MODE === 'mock' && import.meta.env.DEV && <DemoPanel source={source} message={snapshot.lastMessage} />}
-      <footer><span>아가 아이<span className="footer-dot">·</span>수면 모니터링</span><span>{DATA_MODE === 'mock' ? '로컬 프론트엔드 데모' : '로컬 API 연결 모드'}</span></footer>
+      <footer><span>아가 아이<span className="footer-dot">·</span>수면 모니터링</span><span>{CLOUD_MODE ? '보호자 전용 클라우드 모니터' : DATA_MODE === 'mock' ? '로컬 프론트엔드 데모' : '로컬 API 연결 모드'}</span></footer>
       </main>
     </div>
     {selectedEvent && <EventDetail event={selectedEvent} onClose={() => setSelectedId(null)} onAcknowledge={acknowledge} busyId={busyId} />}
