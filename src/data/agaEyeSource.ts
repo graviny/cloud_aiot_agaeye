@@ -1,12 +1,15 @@
 import { EMPTY_SNAPSHOT, mergeEvents } from '../domain/monitor';
 import type { MonitorSnapshot, MonitorSource } from '../domain/types';
 import { mapAgaEyeDevice, mapAgaEyeEvent, mapAgaEyeEvents } from './agaEyeMapping';
+import { createAuthenticatedStream } from './authenticatedStream';
+import type { TokenProvider } from './authenticatedStream';
 
 class HttpError extends Error {
   constructor(readonly status: number) { super(`요청에 실패했습니다. (${status})`); }
 }
 
-export function createAgaEyeSource(baseUrl: string, deviceId: string, staleMs: number): MonitorSource {
+export function createAgaEyeSource(baseUrl: string, deviceId: string, staleMs: number,
+  options?: { getToken: TokenProvider }): MonitorSource {
   const base = baseUrl.replace(/\/$/, '');
   const devicePath = `/devices/${encodeURIComponent(deviceId)}/status`;
   let snapshot: MonitorSnapshot = { ...EMPTY_SNAPSHOT };
@@ -20,10 +23,14 @@ export function createAgaEyeSource(baseUrl: string, deviceId: string, staleMs: n
     listeners.forEach(listener => listener());
   };
   const request = async (path: string, signal: AbortSignal | undefined, init?: RequestInit): Promise<unknown> => {
+    const accessToken = options ? await options.getToken() : null;
+    if (options && !accessToken) throw new Error('로그인이 필요합니다. 다시 로그인해 주세요.');
     const response = await fetch(`${base}${path}`, {
-      credentials: 'include', signal, ...init,
-      headers: { Accept: 'application/json', ...init?.headers },
+      credentials: options ? 'omit' : 'include', signal, ...init,
+      headers: { Accept: 'application/json', ...init?.headers, ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
     });
+    if (response.status === 401) throw new Error('로그인이 만료되었습니다. 다시 로그인해 주세요.');
+    if (response.status === 403) throw new Error('이 기기의 보호자 계정으로 로그인해 주세요.');
     if (!response.ok) throw new HttpError(response.status);
     return response.json();
   };
@@ -66,17 +73,20 @@ export function createAgaEyeSource(baseUrl: string, deviceId: string, staleMs: n
       running = true;
       const activeController = new AbortController();
       controller = activeController;
-      const activeStream = new EventSource(`${base}/stream`, { withCredentials: true });
+      const activeStream = options ? createAuthenticatedStream(`${base}/stream`, options.getToken)
+        : new EventSource(`${base}/stream`, { withCredentials: true });
       const live = () => running && token === generation;
       void refresh();
       activeStream.onopen = () => { if (live()) void refresh(); };
       // This repository sends unnamed SSE messages containing {type, device/event/...}.
-      activeStream.onmessage = message => {
+      activeStream.onmessage = (message: MessageEvent<string>) => {
         if (!live()) return;
         try {
           const value: unknown = JSON.parse(message.data);
           if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid SSE');
           const msg = value as Record<string, unknown>;
+          if (msg.type === 'resync') { void refresh(); return; }
+          if (msg.type === 'storage_unavailable') throw new Error('클라우드 저장소 연결을 확인해 주세요.');
           if (msg.type === 'device') {
             const raw = msg.device as Record<string, unknown> | undefined;
             if (raw?.device_id !== deviceId) return;
@@ -86,6 +96,8 @@ export function createAgaEyeSource(baseUrl: string, deviceId: string, staleMs: n
           } else if (msg.type === 'event') {
             const raw = msg.event as Record<string, unknown> | undefined;
             if (raw?.device_id !== deviceId) return;
+            // End-before-start delivery is retained by the API until metadata arrives.
+            if (raw.metadata_complete === false) { void refresh(); return; }
             const event = mapAgaEyeEvent(raw, base);
             publish({ events: mergeEvents(snapshot.events, [event]) });
           }
@@ -119,6 +131,10 @@ export function createAgaEyeSource(baseUrl: string, deviceId: string, staleMs: n
       if (running && token === generation) publish({
         events: mergeEvents(snapshot.events, [event]), lastMessage: '보호자 확인을 기록했습니다.',
       });
+    },
+    reset: () => {
+      generation++; running = false; controller?.abort(); controller = null;
+      snapshot = { ...EMPTY_SNAPSHOT }; listeners.forEach(listener => listener());
     },
   };
 }

@@ -13,9 +13,13 @@
     "test:e2e": "playwright test",
     "test:agaeye": "playwright test --config playwright.agaeye.config.ts",
     "test:laptop-ai": "node scripts/verify-laptop-demo.mjs",
+    "dev:cloud": "vite --host 127.0.0.1 --port 5176",
+    "test:cloud": "playwright test --config playwright.cloud.config.ts",
+    "test:cloud:fixture": "node scripts/cloud-python.mjs -m uvicorn cloudServer:app --app-dir tests/fixtures --host 127.0.0.1 --port 8012 --no-access-log",
     "test:cloud:api": "node scripts/cloud-python.mjs -m unittest discover -s tests -p cloud_*test.py -v"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
