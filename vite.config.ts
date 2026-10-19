@@ -10,6 +10,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: {
+        '/agaeye-api': {
+          target: env.API_PROXY_TARGET || 'http://127.0.0.1:8000',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/agaeye-api/, ''),
+        },
         '/api': {
           target: env.API_PROXY_TARGET || 'http://127.0.0.1:8000',
           changeOrigin: true,
