@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: agaeye-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/agaeye}
+    username: ${DATABASE_USER:agaeye}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      maximum-pool-size: 12
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: always
+    time-zone: UTC
+  mvc:
+    log-request-details: false
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_AUTH:true}
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.ssl.checkserveridentity: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  health:
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+springdoc:
+  swagger-ui:
+    path: /docs
+    enabled: ${API_DOCS_ENABLED:true}
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+app:
+  environment: ${APP_ENV:development}
+  frontend-url: ${FRONTEND_URL:http://localhost:5177}
+  jwt-secret: ${JWT_SECRET:}
+  worker-key: ${WORKER_KEY:}
+  issuer: agaeye-api
+  cors-origins: ${CORS_ORIGINS:http://localhost:5177,http://127.0.0.1:5177}
+  allow-institutions: ${ALLOW_INSTITUTIONS:true}
+  mail-mode: ${MAIL_MODE:local}
+  mail-from: ${MAIL_FROM:no-reply@example.invalid}
+  media-gateway-url: ${MEDIA_GATEWAY_URL:}
+  outbox-enabled: ${OUTBOX_ENABLED:true}
+  outbox-interval-ms: 1000
+  monitoring-stale-seconds: 30
+  confidence-threshold: 0.6
+logging:
+  level:
+    root: INFO
+    org.springframework.web: WARN
+    org.springframework.jdbc: WARN
+    org.springframework.security: WARN
+    org.springframework.mail: WARN
