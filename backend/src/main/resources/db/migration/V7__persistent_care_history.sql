@@ -10,4 +10,3 @@ CREATE TABLE sleep_records (
  CHECK(ended_at>started_at AND ended_at<=started_at+interval '7 days')
 );
 CREATE INDEX idx_sleep_records_child ON sleep_records(workspace_id,child_id,started_at DESC,id DESC) WHERE deleted_at IS NULL;
-

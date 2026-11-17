@@ -79,4 +79,3 @@ def install(launcher, config, no_camera=False, no_start_model=False):
     print('agaeye standby service is enabled. You can close this terminal.', flush=True)
     print('It starts after reboot and waits/reconnects when the PC server is unavailable.', flush=True)
     print('Status: systemctl --user status agaeye-sky-eye --no-pager', flush=True)
-
