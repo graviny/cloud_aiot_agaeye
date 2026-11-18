@@ -1,0 +1,27 @@
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import assert from 'node:assert/strict';
+import { AppProvider } from '../src/context';
+import { Auth } from '../src/pages/Auth';
+
+const location = { pathname: '/login', search: '?next=/devices', hash: '#code=ABCD-2345', href: 'http://localhost:5173/login' };
+Object.defineProperty(globalThis, 'window', { value: { location }, configurable: true });
+Object.defineProperty(globalThis, 'navigator', { value: { onLine: true }, configurable: true });
+let html = renderToStaticMarkup(<AppProvider><Auth/></AppProvider>);
+assert.ok(html.includes('아이디'));
+assert.ok(html.includes('autoComplete="username"'));
+assert.ok(!html.includes('type="email"'));
+assert.ok(html.includes('current-password'));
+assert.ok(html.includes('로그인 후 아가아이 연결을 이어갈게요'));
+location.pathname = '/signup';
+html = renderToStaticMarkup(<AppProvider><Auth/></AppProvider>);
+assert.ok(html.includes('autoComplete="username"'));
+assert.ok(!html.includes('이메일'));
+assert.ok(!html.includes('기존 계정'));
+assert.ok(!html.includes('@ 앞부분'));
+assert.ok(!html.includes('type="email"'));
+assert.ok(html.includes('new-password'));
+const pattern = html.match(/pattern="([^"]+)"/)![1];
+const valid = new RegExp('^(?:' + pattern + ')$', 'v');
+assert.ok(valid.test('Agaeye.parent_2-test')); assert.ok(!valid.test('email@example.test'));
+console.log('PASS: login renders an ID field; signup renders only ID and password without legacy account guidance; pairing continuation remains visible.');

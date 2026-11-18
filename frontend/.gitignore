@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.sites-runtime/
+artifacts/
+.env
+.env.local
+
+.openai/
+outputs/
+.env.*
+!.env.example
+
+local-*.log

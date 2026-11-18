@@ -1,0 +1,8 @@
+{
+  "wall_time_unix": 1793534400,
+  "posture_state": "risk",
+  "posture_reason": "prone",
+  "posture": {"valid": true, "posture": "prone", "airway": null},
+  "geometry_valid": false,
+  "fall": {"state": "unavailable", "observation_valid": false}
+}

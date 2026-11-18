@@ -1,0 +1,64 @@
+{
+  "parity_passed": true,
+  "source_onnx_sha256": "e2546caef8500e8aaa80b0edec071d77f3b0975daccf560416dc64e8ddc73352",
+  "files": {
+    "model.ncnn.param": "3fb1a450070cccad1df7bca47c324b68fcdf4252562b52fd8ea5008255e10315",
+    "model.ncnn.bin": "fe75a154c7b3b58a7b106953d21c67af951d78a1230ace1849800e4d5368d55f"
+  },
+  "converter": "pnnx 20260526",
+  "ncnn_version": "1.0.20260526",
+  "precision": "FP32",
+  "input": "in0",
+  "output": "out0",
+  "samples": [
+    {
+      "sample": "00.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000518798828125
+    },
+    {
+      "sample": "01.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000335693359375
+    },
+    {
+      "sample": "02.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.00052642822265625
+    },
+    {
+      "sample": "03.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0003509521484375
+    },
+    {
+      "sample": "04.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.00048828125
+    },
+    {
+      "sample": "05.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000518798828125
+    },
+    {
+      "sample": "06.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.00054931640625
+    },
+    {
+      "sample": "07.npz",
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0003662109375
+    }
+  ],
+  "scope": "8 real-image reference inputs against original ONNX Runtime"
+}
