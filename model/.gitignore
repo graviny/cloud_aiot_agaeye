@@ -1,0 +1,17 @@
+# 데이터·학습 결과
+datasets/
+runs/
+results/*
+!results/summary.csv
+
+# 가중치
+models/
+*.pt
+*.onnx
+*_ncnn_model/
+
+# 환경·비밀값
+.venv/
+__pycache__/
+*.pyc
+.env
