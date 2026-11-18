@@ -16,6 +16,7 @@
 | --- | --- |
 | frontend | React 19, TypeScript, Vite, Pretendard |
 | backend | Java 21, Spring Boot, Spring Security JWT, JDBC, PostgreSQL, Flyway |
+| [edge/sky-eye](edge/sky-eye/README.md) | Raspberry Pi 카메라 모델 실행·상태 및 감지 이벤트 생성 |
 | backend/raspberry-pi | 기기 인증·카메라 및 안전 관측 전송용 Python 클라이언트 |
 
 ## 실행
@@ -47,7 +48,7 @@ API 명세는 http://127.0.0.1:8081/docs 에서 확인합니다.
 
 백엔드를 scripts/start-local.ps1 -Lan으로 실행한 뒤 backend/raspberry-pi/README.md의 연결 절차를 따릅니다.
 파이에서 표시한 코드를 앱에 로그인해 아가아이 연결하기 화면에 입력합니다.
-카메라 AI 모델은 별도로 설치된 Sky Eye 모델을 사용합니다. 파이는 평소에 분석 상태와 관측 이벤트를 보냅니다. 안전 알림이 생기면 해당 시점의 JPEG 한 장을 전송합니다. 보호자는 모니터링이나 상단 알림 목록에서 해당 알림을 열어 촬영 시각과 사진을 볼 수 있습니다. 촬영하지 못한 경우에도 알림은 남습니다.
+파이의 카메라 분석 코드와 설치 방법은 [Sky Eye 개발 안내](edge/sky-eye/README.md)에 있습니다. 파이는 평소에 분석 상태와 관측 이벤트를 보냅니다. 안전 알림이 생기면 해당 시점의 JPEG 한 장을 전송합니다. 보호자는 모니터링이나 상단 알림 목록에서 해당 알림을 열어 촬영 시각과 사진을 볼 수 있습니다. 촬영하지 못한 경우에도 알림은 남습니다.
 
 ## 검증
 

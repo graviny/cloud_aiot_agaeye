@@ -1,0 +1,121 @@
+{
+  "parity_passed": true,
+  "samples": [
+    {
+      "index": 0,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0005035400390625
+    },
+    {
+      "index": 1,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.00030517578125
+    },
+    {
+      "index": 2,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0004425048828125
+    },
+    {
+      "index": 3,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000244140625
+    },
+    {
+      "index": 4,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000457763671875
+    },
+    {
+      "index": 5,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000274658203125
+    },
+    {
+      "index": 6,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0003814697265625
+    },
+    {
+      "index": 7,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.00018310546875
+    },
+    {
+      "index": 8,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000457763671875
+    },
+    {
+      "index": 9,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0003204345703125
+    },
+    {
+      "index": 10,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000335693359375
+    },
+    {
+      "index": 11,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000213623046875
+    },
+    {
+      "index": 12,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000396728515625
+    },
+    {
+      "index": 13,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.000213623046875
+    },
+    {
+      "index": 14,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0006866455078125
+    },
+    {
+      "index": 15,
+      "raw_passed": true,
+      "boxes_passed": true,
+      "max_abs_difference": 0.0003204345703125
+    }
+  ],
+  "scope": "16 synthetic brightness/noise inputs; export consistency only, no accuracy or Pi FPS claim",
+  "classes": [
+    "supine",
+    "side",
+    "prone",
+    "airway_visible",
+    "airway_covered"
+  ],
+  "imgsz": 320,
+  "sha256": "e2546caef8500e8aaa80b0edec071d77f3b0975daccf560416dc64e8ddc73352",
+  "source_weights_sha256": "563ca62ba1e9330d3e8d39d5712721b20ad99550902b4099705e4b2b31e08b25",
+  "provenance": "User-provided aga-eye-model-v1.tar.gz; A_original_320_aug",
+  "input_shape": [
+    1,
+    3,
+    320,
+    320
+  ],
+  "onnx_cpu_smoke_passed": true,
+  "pi_hardware_benchmarked": false
+}
