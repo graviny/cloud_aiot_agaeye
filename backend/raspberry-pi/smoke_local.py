@@ -6,7 +6,7 @@ import uuid
 from urllib.request import Request, urlopen
 from agaeye_device import Agent, ApiError
 
-BASE = "http://127.0.0.1:8080"
+BASE = "http://127.0.0.1:8081"
 
 
 def request(path, body=None, token=None, workspace=None, method=None):

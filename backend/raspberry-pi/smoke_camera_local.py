@@ -11,7 +11,8 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 from agaeye_device import Agent
-from camera_forwarder import CameraForwarder
+from alert_camera import AlertCamera
+from datetime import datetime, timezone
 from smoke_local import BASE, request
 from start_agaeye import main as launch
 
@@ -19,7 +20,7 @@ JPEG=base64.b64decode('/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQND
 
 
 def main():
-    account=request('/auth/signup',{'email':'camera-test-%s@example.test'%uuid.uuid4(),'password':uuid.uuid4().hex})
+    account=request('/auth/signup',{'username':'camera-'+uuid.uuid4().hex[:12],'password':uuid.uuid4().hex})
     token,workspace=account['accessToken'],account['workspaceId']
     child=request('/children',{'displayName':'영상 통신 검증용 아이','birthDate':'2026-01-01'},token,workspace)
     with tempfile.TemporaryDirectory(prefix='agaeye-camera-test-') as folder:
@@ -41,20 +42,21 @@ def main():
                     value=JPEG if self.path=='/frame.jpg' else json.dumps({'wall_time_unix':time.time(),'preview_age_s':.1}).encode()
                     self.send_response(200);self.send_header('Content-Length',str(len(value)));self.end_headers();self.wfile.write(value)
             server=ThreadingHTTPServer(('127.0.0.1',0),Preview);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
-            try: CameraForwarder(agent,server.server_address[1]).send_once()
+            at=datetime.now(timezone.utc).isoformat()
+            alert=agent.request('/device/sky-eye/events', {'id':uuid.uuid4().hex*2, 'episodeKey':'test', 'kind':'risk_started','riskType':'prone','observedAt':at}, device=True)['captures'][0]
+            try: AlertCamera(agent,server.server_address[1]).fulfill([alert])
             finally: server.shutdown();server.server_close();thread.join(timeout=3)
-            path=BASE+'/api/v1/children/'+child['id']+'/devices/'+device+'/camera/frame'
+            path=BASE+'/api/v1/children/'+child['id']+'/devices/'+device+'/alerts/'+alert['id']+'/photo'
             headers={'Authorization':'Bearer '+token,'X-Workspace-Id':workspace}
             with urlopen(Request(path,headers=headers),timeout=5) as response:
                 assert response.status==200 and response.read()==JPEG
             try: urlopen(path,timeout=5);raise AssertionError('Anonymous image access was accepted')
             except HTTPError as error: assert error.code==401
-            time.sleep(3.1)
-            with urlopen(Request(path,headers=headers),timeout=5) as response: assert response.status==204
+            with urlopen(Request(path,headers=headers),timeout=5) as response: assert response.read()==JPEG
         finally:
             request('/devices/'+device,token=token,workspace=workspace,method='DELETE')
             request('/auth/logout',{},token)
-    print('PASS: saved connection -> one-command launcher -> data, loopback preview -> authenticated relay -> exact JPEG, anonymous rejection and stale image expiry.')
+    print('PASS: saved connection -> one-command launcher -> data, alert capture -> authenticated exact JPEG, anonymous rejection and stable repeat reads.')
 
 
 if __name__=='__main__': main()

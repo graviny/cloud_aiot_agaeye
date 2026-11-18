@@ -69,7 +69,6 @@ export class AgaeyeClient {
   routines(child: UUID, date?: string) { return this.request<{ items: Routine[] }>('GET', `/children/${encodeURIComponent(child)}/routines${date ? `?date=${encodeURIComponent(date)}` : ''}`); }
   updateRoutine(child: UUID, routine: UUID, body: Partial<Pick<Routine, 'title' | 'status' | 'scheduledAt' | 'endedAt'>>) { return this.request<Routine>('PATCH', `/children/${encodeURIComponent(child)}/routines/${encodeURIComponent(routine)}`, body); }
   monitoring(child: UUID) { return this.request<Monitoring>('GET', `/children/${encodeURIComponent(child)}/monitoring`); }
-  streamToken(child: UUID) { return this.request<{ token: string; gatewayUrl: string; expiresAt: string; reauthorizeAfterSeconds: number }>('POST', `/children/${encodeURIComponent(child)}/stream-token`, {}); }
 
   /** One SSE connection. On completion reconnect with last sequence; refresh REST data on reconnect. */
   async realtime(onMessage: (message: RealtimeMessage) => void, signal: AbortSignal, after = 0): Promise<number> {

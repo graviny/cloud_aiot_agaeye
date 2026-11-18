@@ -151,7 +151,7 @@ def main():
     parser.add_argument('--config', default='~/.config/agaeye/launcher.json')
     parser.add_argument('--fresh-profile', action='store_true', help='After reassignment, back up old model records locally and start with an empty camera records')
     parser.add_argument('--no-start-model', action='store_true', help='Use a model that is already running separately')
-    parser.add_argument('--no-camera', action='store_true', help='Send analysis data without camera preview frames')
+    parser.add_argument('--no-camera', action='store_true', help='Send analysis data without alert photos')
     parser.add_argument('--once', action='store_true', help='Check the connection and send data once')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--install-service', action='store_true', help='Finish setup, enable startup after reboot and keep running in the background')
@@ -194,7 +194,7 @@ def main():
             if not args.no_start_model:
                 start_model(settings['sky_eye_dir'], camera=camera)
             if not args.install_service:
-                print('Starting agaeye data and camera transmission.' + ('' if args.service else ' Keep this terminal open. Press Ctrl+C to stop.'), flush=True)
+                print('Sending observations. Photos are captured only for alerts.' + ('' if args.service else ' Keep this terminal open. Press Ctrl+C to stop.'), flush=True)
                 bridge.run(args.once, settings['preview_port'], not args.no_camera)
         if args.install_service:
             # The foreground process releases AgentLock before starting the daemon.

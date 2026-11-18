@@ -18,5 +18,5 @@ public class EventController {
     @PostMapping("/events/{event}/acknowledgements") Object acknowledge(@AuthenticationPrincipal Jwt jwt,@RequestHeader("X-Workspace-Id")UUID ws,@PathVariable UUID event){return events.acknowledge(policy.actor(jwt,ws),event);}
     @PostMapping("/events/{event}/resolution") Object resolve(@AuthenticationPrincipal Jwt jwt,@RequestHeader("X-Workspace-Id")UUID ws,@PathVariable UUID event,@RequestHeader("Idempotency-Key")String key,@RequestBody @Valid EventService.Resolution body){return events.resolve(policy.actor(jwt,ws),event,body,key);}
     @GetMapping("/children/{child}/monitoring") Object monitoring(@AuthenticationPrincipal Jwt jwt,@RequestHeader("X-Workspace-Id")UUID ws,@PathVariable UUID child){return monitoring.state(policy.actor(jwt,ws),child);}
-    @PostMapping("/children/{child}/stream-token") Object token(@AuthenticationPrincipal Jwt jwt,@RequestHeader("X-Workspace-Id")UUID ws,@PathVariable UUID child){return monitoring.streamToken(policy.actor(jwt,ws),child);}
+    @PostMapping("/children/{child}/stream-token") Object token(@AuthenticationPrincipal Jwt jwt,@RequestHeader("X-Workspace-Id")UUID ws,@PathVariable UUID child){policy.require(policy.actor(jwt,ws),child,"monitor:live");throw new com.agaeye.common.ApiException(410,"STREAM_RETIRED","모니터링에서 알림 사진을 확인해 주세요.");}
 }

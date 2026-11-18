@@ -20,6 +20,9 @@ for (const page of [<Dashboard onAlert={()=>{}}/>, <Summary/>, <Monitor onAlert=
 }
 const home = renderToStaticMarkup(<AppProvider><Dashboard onAlert={()=>{}}/></AppProvider>);
 assert.ok(home.includes('아가아이')); assert.ok(home.includes('수면 시간')); assert.ok(home.includes('수면 환경 점검'));
+const monitor = renderToStaticMarkup(<AppProvider><Monitor onAlert={()=>{}}/></AppProvider>);
+assert.ok(monitor.includes('최근 수면 알림'));
+assert.ok(!monitor.includes('실시간 미리보기') && !monitor.includes('camera-live-image'));
 const history = renderToStaticMarkup(<AppProvider><Summary/></AppProvider>);
 assert.ok(history.includes('수면 시간 추가하기')); assert.ok(history.includes('히스토리')); assert.ok(history.includes('수면 기록 수정'));
 console.log('PASS: home, history, monitor, child, welcome and settings render without cry features; sleep controls and 아가아이 branding remain.');

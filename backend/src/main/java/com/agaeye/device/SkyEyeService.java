@@ -2,7 +2,7 @@ package com.agaeye.device;
 
 import com.agaeye.common.*;
 import com.agaeye.monitoring.MonitoringService;
-import com.agaeye.monitoring.CameraRelay;
+import com.agaeye.monitoring.AlertPhotos;
 import com.agaeye.security.Policy;
 import com.agaeye.security.Policy.Actor;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,8 +33,8 @@ public class SkyEyeService {
         @NotNull Instant observedAt,Instant startedAt,Instant endedAt,UUID episodeUid,
         @Pattern(regexp="quiet|input_gap|segment_limit|service_stopped|interrupted") String endReason) {}
     private final Db db; private final PairingService pairing; private final Policy policy;
-    private final MonitoringService monitoring; private final ObjectMapper mapper; private final CameraRelay camera;
-    public SkyEyeService(Db db,PairingService pairing,Policy policy,MonitoringService monitoring,ObjectMapper mapper,CameraRelay camera) {
+    private final MonitoringService monitoring; private final ObjectMapper mapper; private final AlertPhotos camera;
+    public SkyEyeService(Db db,PairingService pairing,Policy policy,MonitoringService monitoring,ObjectMapper mapper,AlertPhotos camera) {
         this.db=db;this.pairing=pairing;this.policy=policy;this.monitoring=monitoring;this.mapper=mapper;this.camera=camera;
     }
     private static boolean fresh(Instant at,Instant now,int seconds) {
@@ -61,14 +61,21 @@ public class SkyEyeService {
         var device=pairing.authorize(token);UUID deviceId=id(device,"id");
         validTime(body.observedAt());validTime(body.video().observedAt());
         var previous=db.one("SELECT observed_at FROM sky_eye_status WHERE device_id=:id",p("id",deviceId));
-        if(previous.isPresent()&&body.observedAt().isBefore(instant(previous.get(),"observed_at")))throw ApiException.conflict("STALE_MODEL_STATUS");
+        Instant observedAt=body.observedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        if(previous.isPresent()&&observedAt.isBefore(instant(previous.get(),"observed_at")))throw ApiException.conflict("STALE_MODEL_STATUS");
         var current=effective(body,Instant.now());
-        db.update("INSERT INTO sky_eye_status(device_id,observed_at,body) VALUES(:id,:at,cast(:body as jsonb)) ON CONFLICT(device_id) DO UPDATE SET observed_at=:at,body=cast(:body as jsonb),received_at=now()",p("id",deviceId,"at",body.observedAt(),"body",db.json(current)));
+        db.update("INSERT INTO sky_eye_status(device_id,observed_at,body) VALUES(:id,:at,cast(:body as jsonb)) ON CONFLICT(device_id) DO UPDATE SET observed_at=:at,body=cast(:body as jsonb),received_at=now()",p("id",deviceId,"at",observedAt,"body",db.json(current)));
         // Connection/analysis freshness never creates a playable video stream.
         var safety=safety(current);var v=current.video();
         Double confidence=confident(v.bodyConfidence())?v.bodyConfidence():confident(v.faceConfidence())?v.faceConfidence():null;
         monitoring.heartbeat(deviceId,new MonitoringService.Heartbeat(Instant.now(),confidence==null?"unverifiable":"live",safety,confidence,v.observedAt()));
-        return p("accepted",true);
+        Instant at = v.available() ? v.observedAt() : current.observedAt();
+        if (fresh(at,Instant.now(),8)) {
+            for (String field : List.of("posture","face")) camera.observe(deviceId,field,safety.get(field),at);
+            if (v.available() && v.geometryValid())
+                camera.observe(deviceId,"edge",safety.get("edge").equals("caution") ? "caution" : "stable",at);
+        }
+        return p("accepted",true,"captures",camera.awaitingCapture(deviceId));
     }
     @Transactional public Object event(String token,Event body) {
         var device=pairing.authorize(token);validTime(body.observedAt());validTime(body.startedAt());validTime(body.endedAt());
@@ -78,7 +85,18 @@ public class SkyEyeService {
         if(existing.isPresent()) {
             if(!mapper.valueToTree(existing.get().get("body")).equals(mapper.valueToTree(body)))throw ApiException.conflict("MODEL_EVENT_CONFLICT");
         } else db.update("INSERT INTO sky_eye_events(device_id,event_id,observed_at,body) VALUES(:device,:event,:at,cast(:body as jsonb))",args);
-        return p("accepted",true,"duplicate",existing.isPresent());
+        UUID deviceId = id(device,"id");
+        if (existing.isEmpty() && "risk_started".equals(body.kind()) && fresh(body.observedAt(),Instant.now(),30)) {
+            String field = switch (Objects.toString(body.riskType(),"")) {
+                case "prone" -> "posture";
+                case "face_covered" -> "face";
+                case "edge_departure_warning" -> "edge";
+                default -> "observation";
+            };
+            if ("observation".equals(field)) camera.create(deviceId,field,"caution",body.observedAt());
+            else camera.observe(deviceId,field,field.equals("edge") ? "caution" : "immediate",body.observedAt());
+        }
+        return p("accepted",true,"duplicate",existing.isPresent(),"captures",camera.awaitingCapture(deviceId));
     }
     public Object snapshot(Actor actor,UUID child) {
         policy.require(actor,child,"monitor:live");policy.require(actor,child,"detection:read");
@@ -91,7 +109,7 @@ public class SkyEyeService {
             String reportState=row.get("received_at")==null?(connected?"awaiting_model":"awaiting_sender"):!connected?"offline":!status.video().available()?"input_unavailable":"receiving";
             var events=db.list("SELECT body,received_at FROM sky_eye_events WHERE device_id=:device ORDER BY observed_at DESC,event_id LIMIT 30",p("device",device));
             var eventViews=events.stream().map(e->{var event=mapper.convertValue(e.get("body"),Event.class);return p("event",event,"recent",fresh(event.observedAt(),now,30)&&fresh(instant(e,"received_at"),now,30));}).toList();
-            items.add(p("deviceId",device,"name",row.get("display_name"),"connected",connected,"reportState",reportState,"lastReportAt",row.get("received_at"),"camera",camera.state(device),"status",status,"safety",safety(status),"events",eventViews));
+            items.add(p("deviceId",device,"name",row.get("display_name"),"connected",connected,"reportState",reportState,"lastReportAt",row.get("received_at"),"alerts",camera.recentAlerts(device),"status",status,"safety",safety(status),"events",eventViews));
         }
         return p("childId",child,"items",items,"serverTime",now);
     }

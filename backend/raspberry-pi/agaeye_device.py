@@ -124,13 +124,13 @@ class Agent:
         request = Request(self.api_url + "/api/v1" + path, data=payload, headers=headers)
         return self._send(request)
 
-    def send_frame(self, captured_at, jpeg):
+    def send_photo(self, alert_id, captured_at, jpeg):
         self.require_linked_local_state()
         if not self.credential:
-            raise ValueError("Pair the device before streaming.")
+            raise ValueError("Pair the device before sending an alert photo.")
         headers = {"Content-Type": "image/jpeg", "Accept": "application/json",
                    "X-Device-Token": self.credential["accessToken"], "X-Frame-Captured-At": captured_at}
-        return self._send(Request(self.api_url + "/api/v1/device/camera/frame", data=jpeg, headers=headers), timeout=3)
+        return self._send(Request(self.api_url + "/api/v1/device/alerts/" + str(uuid.UUID(alert_id)) + "/photo", data=jpeg, headers=headers), timeout=3)
 
     def _send(self, request, timeout=15):
         try:

@@ -17,10 +17,10 @@ public class MonitoringService {
     public record Heartbeat(@NotNull Instant observedAt,@NotBlank @Pattern(regexp="live|offline|unverifiable") String status,
         Map<String,String> safety,@DecimalMin("0") @DecimalMax("1") Double confidence,Instant analysisObservedAt) {}
     public record Sensor(@NotBlank @Pattern(regexp="temperature|humidity|noise") String type,@NotNull Double value,@NotNull Instant observedAt) {}
-    private final Db db; private final Policy policy; private final Audit audit;
-    private final int staleSeconds; private final double confidenceThreshold; private final String gateway;
-    public MonitoringService(Db db,Policy policy,Audit audit,@Value("${app.monitoring-stale-seconds:30}")int staleSeconds,@Value("${app.confidence-threshold:0.6}")double threshold,@Value("${app.media-gateway-url:}")String gateway) {
-        this.db=db;this.policy=policy;this.audit=audit;this.staleSeconds=staleSeconds;this.confidenceThreshold=threshold;this.gateway=gateway;
+    private final Db db; private final Policy policy;
+    private final int staleSeconds; private final double confidenceThreshold;
+    public MonitoringService(Db db,Policy policy,@Value("${app.monitoring-stale-seconds:30}")int staleSeconds,@Value("${app.confidence-threshold:0.6}")double threshold) {
+        this.db=db;this.policy=policy;this.staleSeconds=staleSeconds;this.confidenceThreshold=threshold;
     }
     @Transactional public Object createDevice(Device body) {
         var link=db.required("SELECT wc.id FROM workspace_children wc JOIN workspaces w ON w.id=wc.workspace_id WHERE wc.workspace_id=:ws AND wc.child_id=:child AND wc.link_status='active' AND w.status='active' AND (wc.share_grant_id IS NULL OR EXISTS(SELECT 1 FROM data_share_grants s WHERE s.id=wc.share_grant_id AND s.revoked_at IS NULL AND s.expires_at>now()))",p("ws",body.workspaceId(),"child",body.childId()),"CHILD_NOT_ACCESSIBLE");
@@ -73,25 +73,5 @@ public class MonitoringService {
             sensors.add(p("type",type,"connected",connected,"unit",unit(type),"value",connected?reading.get().get("value"):null,"observedAt",connected?reading.get().get("observed_at"):null));
         }
         return p("childId",child,"streamStatus",status,"streamUrl",null,"safety",safety,"sensors",sensors,"lastUpdatedAt",updated);
-    }
-    @Transactional public Object streamToken(Actor actor,UUID child) {
-        policy.require(actor,child,"monitor:live");var source=liveSource(actor.workspaceId(),child);
-        if(gateway.isBlank())throw new ApiException(503,"MEDIA_GATEWAY_NOT_CONFIGURED","영상 서비스 연결이 아직 설정되지 않았어요.");
-        String token=Secrets.random();UUID id=UUID.randomUUID();Instant expires=Instant.now().plusSeconds(60);
-        db.update("INSERT INTO stream_access_tokens(id,token_hash,membership_id,workspace_id,child_id,session_id,device_id,expires_at) VALUES(:id,:hash,:m,:ws,:child,:session,:device,:expires)",p("id",id,"hash",Secrets.hash(token),"m",actor.membershipId(),"ws",actor.workspaceId(),"child",child,"session",actor.sessionId(),"device",source.get("source_id"),"expires",expires));
-        audit.record(actor.workspaceId(),actor.userId(),"stream.issue","child",child);
-        return p("token",token,"expiresAt",expires,"gatewayUrl",gateway,"transport","gateway","reauthorizeAfterSeconds",5);
-    }
-    private Map<String,Object> liveSource(UUID workspace,UUID child) {
-        return db.one("SELECT * FROM monitoring_sessions WHERE workspace_id=:ws AND child_id=:child AND ended_at IS NULL AND status='live' AND last_updated_at>:since ORDER BY last_updated_at DESC LIMIT 1",p("ws",workspace,"child",child,"since",Instant.now().minusSeconds(staleSeconds))).orElseThrow(()->new ApiException(409,"STREAM_UNAVAILABLE","실시간 영상을 확인할 수 없어요."));
-    }
-    /** Media gateways call at connection and at most every five seconds, terminating on any failure. */
-    public Object introspect(String token) {
-        var row=db.one("SELECT * FROM stream_access_tokens WHERE token_hash=:hash AND revoked_at IS NULL AND expires_at>now()",p("hash",Secrets.hash(token))).orElseThrow(()->ApiException.forbidden("STREAM_TOKEN_INVALID"));
-        try {
-            var actor=policy.memberActor(id(row,"membership_id"));policy.requireSession(actor.userId(),id(row,"session_id"));policy.require(actor,id(row,"child_id"),"monitor:live");
-            db.required("SELECT id FROM monitoring_sessions WHERE source_id=:device AND workspace_id=:ws AND child_id=:child AND status='live' AND ended_at IS NULL AND last_updated_at>:since",p("device",row.get("device_id"),"ws",row.get("workspace_id"),"child",row.get("child_id"),"since",Instant.now().minusSeconds(staleSeconds)),"STREAM_UNAVAILABLE");
-            return p("active",true,"deviceId",row.get("device_id"),"childId",row.get("child_id"),"workspaceId",row.get("workspace_id"),"expiresAt",row.get("expires_at"),"reauthorizeAfterSeconds",5);
-        } catch(ApiException e){throw ApiException.forbidden("STREAM_TOKEN_INVALID");}
     }
 }

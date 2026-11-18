@@ -1,10 +1,25 @@
 export type Safety = 'stable' | 'caution' | 'immediate' | 'unknown';
 export interface ModelEvent { id: string; episodeKey: string; kind: string; riskType: string | null; observedAt: string; episodeUid: string | null; endReason: string | null }
+export interface CameraAlert {
+  id: string;
+  field: 'posture' | 'face' | 'edge' | 'observation';
+  level: Exclude<Safety, 'stable'>;
+  observedAt: string;
+  capturedAt: string | null;
+}
+export function alertLabel(alert: CameraAlert) {
+  const field = { posture: '아기 자세', face: '얼굴 노출', edge: '가장자리 접근', observation: '기기 관측' }[alert.field];
+  return field + ' · ' + safetyLabels[alert.level];
+}
+export function listAlerts(snapshot: SkySnapshot | null) {
+  return (snapshot?.items || []).flatMap(device => (device.alerts || []).map(alert => ({ device, alert })))
+    .sort((a, b) => Date.parse(b.alert.observedAt) - Date.parse(a.alert.observedAt) || a.alert.id.localeCompare(b.alert.id));
+}
 export interface SkyDevice {
   deviceId: string; name: string; connected: boolean;
   reportState?: 'awaiting_sender' | 'awaiting_model' | 'offline' | 'input_unavailable' | 'receiving';
   lastReportAt?: string | null;
-  camera?: { available: boolean; capturedAt: string | null; width: number | null; height: number | null };
+  alerts?: CameraAlert[];
   status: {
     observedAt: string;
     video: { available: boolean; observedAt: string | null; posture: string | null; airway: string | null; state: string; geometryValid: boolean; fallState: string | null; fps: number | null };
@@ -38,7 +53,6 @@ export function currentSnapshot(snapshot: SkySnapshot | null, receivedAt: number
     const exporter = fresh(item.status.observedAt, 8000) && elapsed < 8000;
     const video = exporter && item.status.video.available && fresh(item.status.video.observedAt, 5000);
     return { ...item, connected: item.connected && elapsed < 15000,
-      camera: item.camera ? { ...item.camera, available: item.camera.available && fresh(item.camera.capturedAt, 3000) && elapsed < 3000 } : undefined,
       safety: video ? item.safety : { posture: 'unknown', face: 'unknown', edge: 'unknown', objects: 'unknown' },
       status: { observedAt: item.status.observedAt, video: { ...item.status.video, available: video } },
       events: item.events.map(entry => ({ ...entry, recent: entry.recent && fresh(entry.event.observedAt, 30000) })),

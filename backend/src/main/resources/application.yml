@@ -64,7 +64,6 @@ app:
   allow-institutions: ${ALLOW_INSTITUTIONS:true}
   mail-mode: ${MAIL_MODE:local}
   mail-from: ${MAIL_FROM:no-reply@example.invalid}
-  media-gateway-url: ${MEDIA_GATEWAY_URL:}
   outbox-enabled: ${OUTBOX_ENABLED:true}
   outbox-interval-ms: 1000
   monitoring-stale-seconds: 30

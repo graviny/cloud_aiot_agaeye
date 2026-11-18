@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { connectionLabel, currentSnapshot, eventLabel, type SkySnapshot } from '../src/skyEye.ts';
+import { connectionLabel, currentSnapshot, listAlerts, eventLabel, type SkySnapshot } from '../src/skyEye.ts';
 
 function fixture(): SkySnapshot {
   const at = '2026-11-01T00:00:00Z';
@@ -22,12 +22,13 @@ test('old events stop appearing as recent and model end is not caregiver resolut
   assert.match(eventLabel(snapshot.items[0].events[0].event), /모델 위험 구간 종료/);
   assert.equal(currentSnapshot(null, 0, 0), null);
 });
-test('approved but silent devices explain the next step and camera freshness is independent of inference', () => {
-  assert.match(connectionLabel({ connected: false, reportState: 'awaiting_sender' }), /연결 승인됨.*파이 실행 대기/);
-  assert.match(connectionLabel({ connected: true, reportState: 'input_unavailable' }), /분석 입력 확인/);
-  const snapshot = fixture(); snapshot.items[0].camera = { available: true, capturedAt: snapshot.serverTime, width: 640, height: 480 };
-  snapshot.items[0].status.video.available = false;
-  assert.equal(currentSnapshot(snapshot, 0, 1000)?.items[0].camera?.available, true);
-  assert.equal(currentSnapshot(snapshot, 0, 1000)?.items[0].safety.face, 'unknown');
-  assert.equal(currentSnapshot(snapshot, 0, 4000)?.items[0].camera?.available, false);
+test('alerts retain their own photo and capture time after inference expires', () => {
+  const snapshot = fixture();
+  assert.match(connectionLabel({ connected: false, reportState: 'awaiting_sender' }), /파이 실행 대기/);
+  snapshot.items[0].alerts = [
+    { id: 'older', field: 'posture', level: 'immediate', observedAt: snapshot.serverTime, capturedAt: snapshot.serverTime },
+    { id: 'newer', field: 'face', level: 'unknown', observedAt: '2026-11-01T00:01:00Z', capturedAt: null }
+  ];
+  const results = listAlerts(currentSnapshot(snapshot, 0, 60000));
+  assert.deepEqual(results.map(({ alert }) => [alert.id, alert.capturedAt]), [['newer', null], ['older', snapshot.serverTime]]);
 });

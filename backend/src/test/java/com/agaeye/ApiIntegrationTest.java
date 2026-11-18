@@ -162,16 +162,16 @@ class ApiIntegrationTest {
         var first=call("POST","/invitations/accept",target,p("token",token),"accept-once",200);var second=call("POST","/invitations/accept",target,p("token",token),"accept-once",200);assertThat(second).isEqualTo(first);
         assertThat(db.list("SELECT id FROM child_access_grants WHERE invitation_id=:id",p("id",uuid(invited,"id")))).hasSize(1);
     }
-    @Test void revokingInvitationInvalidatesApiSseScopeAndIssuedStreamToken()throws Exception{
+    @Test void revokingInvitationInvalidatesApiSseScopeAndRetiresStreaming()throws Exception{
         var owner=user();var target=user();var child=child(owner);UUID id=uuid(child,"id"),camera=camera(owner,id);heartbeat(camera,"live");
         var invited=invite(owner,target,child,List.of("child:read","monitor:live","detection:read","notification:receive"));target=accept(owner,target,invited);
-        var stream=call("POST","/children/"+id+"/stream-token",target,Map.of(),200);worker("/stream-tokens/introspect",p("token",stream.path("token").asText()),200);
+        call("POST","/children/"+id+"/stream-token",target,Map.of(),410);worker("/stream-tokens/introspect",p("token","retired"),410);
         var jwt=decoder.decode(target.token());assertThat(notifications.children(policy.actor(jwt,target.workspace()))).contains(id);
         var connection=mvc.perform(get("/api/v1/realtime").header("Authorization","Bearer "+target.token()).header("X-Workspace-Id",target.workspace())).andReturn();
         assertThat(connection.getRequest().isAsyncStarted()).isTrue();
         call("DELETE","/invitations/"+invited.path("id").asText(),owner,null,200);
         assertThat(connection.getAsyncResult(5000)).isNull();
-        call("GET","/children/"+id,target,null,404);worker("/stream-tokens/introspect",p("token",stream.path("token").asText()),403);
+        call("GET","/children/"+id,target,null,404);worker("/stream-tokens/introspect",p("token","retired"),410);
         assertThat(notifications.children(policy.actor(jwt,target.workspace()))).isEmpty();
     }
     @Test void expiredGrantStopsExistingAccess()throws Exception{
@@ -331,9 +331,9 @@ class ApiIntegrationTest {
     @Test void unlinkStopsTokensAndStreamsAndAllowsExplicitReassignment()throws Exception{
         var owner=usernameUser();var child=child(owner);UUID id=uuid(child,"id");var pi=pi();var paired=approve(owner,id,pi,"pair",200);var credential=poll(pi,200);String token=credential.path("accessToken").asText();
         deviceCall("/heartbeat",token,p("status","live","observedAt",Instant.now(),"analysisObservedAt",Instant.now(),"confidence",0.9,"safety",p("face","stable","posture","stable","edge","stable","objects","stable")),200);
-        var stream=call("POST","/children/"+id+"/stream-token",owner,Map.of(),200);
+        call("POST","/children/"+id+"/stream-token",owner,Map.of(),410);
         call("DELETE","/devices/"+paired.path("deviceId").asText(),owner,null,200);deviceCall("/heartbeat",token,p("status","live","observedAt",Instant.now()),401);
-        worker("/stream-tokens/introspect",p("token",stream.path("token").asText()),403);worker("/devices/"+paired.path("deviceId").asText()+"/heartbeat",p("status","live","observedAt",Instant.now()),404);
+        worker("/stream-tokens/introspect",p("token","retired"),410);worker("/devices/"+paired.path("deviceId").asText()+"/heartbeat",p("status","live","observedAt",Instant.now()),404);
         call("POST","/device/authenticate",null,proof(pi.keys(),"authenticate"),401);
         var newOwner=user();UUID newChild=uuid(child(newOwner),"id");var next=new Pi(pi.keys(),call("POST","/pairing/start",null,proof(pi.keys(),"pair"),200));approve(newOwner,newChild,next,"reassign",200);
         var newCredential=poll(next,200);assertThat(newCredential.path("deviceId")).isNotEqualTo(credential.path("deviceId"));assertThat(newCredential.path("childId").asText()).isEqualTo(newChild.toString());deviceCall("/me",token,null,401);
@@ -341,12 +341,12 @@ class ApiIntegrationTest {
     @Test void localUnlinkRevokesAccessKeepsHistoryAndAllowsNewCodeWithoutAccountLogin()throws Exception{
         var owner=user();UUID child=uuid(child(owner),"id");var pi=pi();UUID device=uuid(approve(owner,child,pi,"pair",200),"deviceId");String token=poll(pi,200).path("accessToken").asText();
         deviceCall("/heartbeat",token,p("status","live","observedAt",Instant.now(),"analysisObservedAt",Instant.now(),"confidence",0.9,"safety",p("face","stable","posture","stable","edge","stable","objects","stable")),200);
-        var stream=call("POST","/children/"+child+"/stream-token",owner,Map.of(),200);
+        call("POST","/children/"+child+"/stream-token",owner,Map.of(),410);
         var event=detection(owner,child,device,"edge_proximity","caution",Instant.now().minusSeconds(30));
         var signed=proof(pi.keys(),"unlink",device);
         assertThat(call("POST","/device/unlink",null,signed,200).path("unlinked").asBoolean()).isTrue();
         call("POST","/device/unlink",null,signed,401);
-        deviceCall("/me",token,null,401);worker("/stream-tokens/introspect",p("token",stream.path("token").asText()),403);
+        deviceCall("/me",token,null,401);worker("/stream-tokens/introspect",p("token","retired"),410);
         assertThat(db.required("SELECT id FROM detection_events WHERE id=:id",p("id",uuid(event,"id")),"missing")).isNotEmpty();
         assertThat(db.list("SELECT id FROM monitoring_sessions WHERE source_id=:id AND ended_at IS NULL",p("id",device))).isEmpty();
         assertThat(db.list("SELECT id FROM audit_logs WHERE action='device.unlink.local' AND object_id=:id AND actor_user_id IS NULL",p("id",device))).hasSize(1);
@@ -413,36 +413,78 @@ class ApiIntegrationTest {
     @Test void approvedPiWithoutSenderIsShownAsWaitingInsteadOfMissing()throws Exception{
         var owner=user();UUID child=uuid(child(owner),"id");var pi=pi();approve(owner,child,pi,"waiting",200);poll(pi,200);
         var item=call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0);
-        assertThat(item.path("reportState").asText()).isEqualTo("awaiting_sender");assertThat(item.path("lastReportAt").isNull()).isTrue();assertThat(item.path("camera").path("available").asBoolean()).isFalse();
+        assertThat(item.path("reportState").asText()).isEqualTo("awaiting_sender");assertThat(item.path("lastReportAt").isNull()).isTrue();assertThat(item.path("alerts")).isEmpty();
     }
     private byte[] jpeg()throws Exception{
         var image=new java.awt.image.BufferedImage(8,8,java.awt.image.BufferedImage.TYPE_INT_RGB);
         var out=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"JPEG",out);return out.toByteArray();
     }
-    private MockHttpServletRequestBuilder uploadFrame(String token,Instant at,byte[] bytes){return post("/api/v1/device/camera/frame").header("X-Device-Token",token).header("X-Frame-Captured-At",at.toString()).contentType("image/jpeg").content(bytes);}
-    @Test void cameraFramesRequireChildAccessAndUnlinkImmediatelyRevokesReads()throws Exception{
-        var owner=user();var outsider=user();UUID child=uuid(child(owner),"id"),other=uuid(child(owner),"id");var pi=pi();approve(owner,child,pi,"camera",200);var credentials=poll(pi,200);String token=credentials.path("accessToken").asText(),device=credentials.path("deviceId").asText();
-        var bytes=jpeg();response(uploadFrame(token,Instant.now(),bytes),200);
-        String path="/api/v1/children/"+child+"/devices/"+device+"/camera/frame";
-        var frame=mvc.perform(get(path).header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace())).andReturn().getResponse();
-        assertThat(frame.getStatus()).isEqualTo(200);assertThat(frame.getContentAsByteArray()).isEqualTo(bytes);assertThat(frame.getContentType()).isEqualTo("image/jpeg");assertThat(frame.getHeader("Cache-Control")).contains("no-store");
-        response(get(path),401);response(get(path).header("Authorization","Bearer "+outsider.token()).header("X-Workspace-Id",outsider.workspace()),404);
-        call("GET","/children/"+other+"/devices/"+device+"/camera/frame",owner,null,404);
-        assertThat(call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0).path("camera").path("available").asBoolean()).isTrue();
-        call("DELETE","/devices/"+device,owner,null,200);response(uploadFrame(token,Instant.now(),bytes),401);call("GET",path.substring(7),owner,null,404);
+    private MockHttpServletRequestBuilder uploadPhoto(String token,String alert,Instant at,byte[] bytes) {
+        return post("/api/v1/device/alerts/"+alert+"/photo").header("X-Device-Token",token)
+                .header("X-Frame-Captured-At",at.toString()).contentType("image/jpeg").content(bytes);
     }
-    @Test void cameraRejectsStaleInvalidOversizedFramesAndReturnsNoFrameBeforeUpload()throws Exception{
-        var owner=user();UUID child=uuid(child(owner),"id");var pi=pi();approve(owner,child,pi,"camera",200);var c=poll(pi,200);String token=c.path("accessToken").asText(),device=c.path("deviceId").asText();
-        response(get("/api/v1/children/"+child+"/devices/"+device+"/camera/frame").header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace()),204);
-        response(uploadFrame(token,Instant.now().minusSeconds(20),jpeg()),422);
-        response(uploadFrame(token,Instant.now(),"not a jpeg".getBytes(StandardCharsets.UTF_8)),422);
-        response(uploadFrame(token,Instant.now(),new byte[524289]),413);
-        response(uploadFrame(token,Instant.now(),jpeg()),200);response(uploadFrame(token,Instant.now(),jpeg()),429);
+    private JsonNode risk(String token,String key,String type,Instant at) throws Exception {
+        return deviceCall("/sky-eye/events",token,p("id",key.repeat(64),"episodeKey",key,"kind","risk_started","riskType",type,"observedAt",at),200);
     }
-    @Test void cameraFramesExpireEvenWhenThePiOrViewerKeepsRunning()throws Exception{
-        var owner=user();UUID child=uuid(child(owner),"id");var pi=pi();approve(owner,child,pi,"camera",200);var c=poll(pi,200);String token=c.path("accessToken").asText(),device=c.path("deviceId").asText();
-        response(uploadFrame(token,Instant.now().minusSeconds(4),jpeg()),200);
-        response(get("/api/v1/children/"+child+"/devices/"+device+"/camera/frame").header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace()),204);
+    @Test void photoBelongsToOneAlertAndItsAuthorizedDeviceAndChild() throws Exception {
+        var owner=user(); var outsider=user(); UUID child=uuid(child(owner),"id"),other=uuid(child(owner),"id");
+        var pi=pi(); approve(owner,child,pi,"camera",200); var c=poll(pi,200);
+        String token=c.path("accessToken").asText(),device=c.path("deviceId").asText();
+        Instant at=Instant.now(); var photo=jpeg();
+        String alert=risk(token,"a","prone",at).path("captures").get(0).path("id").asText();
+        String path="/api/v1/children/"+child+"/devices/"+device+"/alerts/"+alert+"/photo";
+        var caregiver=get(path).header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace());
+        response(caregiver,204);
+        response(uploadPhoto(token,alert,at.minusSeconds(20),photo),422);
+        response(uploadPhoto(token,alert,at,"bad".getBytes(StandardCharsets.UTF_8)),422);
+        response(uploadPhoto(token,alert,at,new byte[524289]),413);
+        var otherPi=pi(); approve(owner,other,otherPi,"other",200);
+        response(uploadPhoto(poll(otherPi,200).path("accessToken").asText(),alert,at,photo),404);
+        response(uploadPhoto(token,alert,at,photo),200);
+        var retry=jpeg(); retry[10]^=1;
+        response(uploadPhoto(token,alert,at,retry),200);
+        var saved=mvc.perform(caregiver).andReturn().getResponse();
+        assertThat(saved.getContentAsByteArray()).isEqualTo(photo);
+        assertThat(saved.getHeader("Cache-Control")).contains("no-store");
+        assertThat(risk(token,"a","prone",at).path("captures")).isEmpty();
+        String next=risk(token,"b","face_covered",at).path("captures").get(0).path("id").asText();
+        response(get(path.replace(alert,next)).header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace()),204);
+        response(get(path),401);
+        response(get(path).header("Authorization","Bearer "+outsider.token()).header("X-Workspace-Id",outsider.workspace()),404);
+        response(get(path.replace(child.toString(),other.toString())).header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace()),404);
+        call("DELETE","/devices/"+device,owner,null,200);
+        response(caregiver,404); response(uploadPhoto(token,alert,at,photo),401);
+    }
+    @Test void sustainedPostureRiskProducesOneCaptureAndANewAlertAfterRecovery() throws Exception {
+        var owner=user(); UUID child=uuid(child(owner),"id"); var pi=pi(); approve(owner,child,pi,"camera",200);
+        String token=poll(pi,200).path("accessToken").asText();
+        Instant at=Instant.now();
+        var normal=skyStatus(at); assertThat(deviceCall("/sky-eye/status",token,normal,200).path("captures")).isEmpty();
+        var risk=skyStatus(at);
+        risk.put("video",p("available",true,"observedAt",at,"posture","prone","state","risk","bodyConfidence",0.95));
+        String first=deviceCall("/sky-eye/status",token,risk,200).path("captures").get(0).path("id").asText();
+        assertThat(deviceCall("/sky-eye/status",token,risk,200).path("captures")).hasSize(1);
+        assertThat(risk(token,"f","prone",at).path("captures").get(0).path("id").asText()).isEqualTo(first);
+        // Move the healthy interval into the past without sleeping through device polling.
+        deviceCall("/sky-eye/status",token,normal,200);
+        db.update("UPDATE sky_eye_notice_state SET stable_since=now()-interval '11 seconds' WHERE field='posture'", Map.of());
+        deviceCall("/sky-eye/status",token,normal,200);
+        deviceCall("/sky-eye/status",token,risk,200);
+        var alerts=call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0).path("alerts");
+        assertThat(alerts).hasSize(2);
+    }
+
+    @Test void unknownPostureWaitsForContinuousObservationsAndNeverUsesAnotherAlertsImage() throws Exception {
+        var owner=user(); UUID child=uuid(child(owner),"id"); var pi=pi(); approve(owner,child,pi,"camera",200);
+        String token=poll(pi,200).path("accessToken").asText();
+        Instant at=Instant.now();
+        var unknown=p("observedAt",at,"video",p("available",false,"state","unavailable"));
+        assertThat(deviceCall("/sky-eye/status",token,unknown,200).path("captures")).isEmpty();
+        db.update("UPDATE sky_eye_notice_state SET unknown_since=now()-interval '11 seconds'",Map.of());
+        var alerts=deviceCall("/sky-eye/status",token,unknown,200).path("captures");
+        assertThat(alerts).hasSize(2);
+        assertThat(deviceCall("/sky-eye/status",token,unknown,200).path("captures")).isEqualTo(alerts);
+        assertThat(db.list("SELECT id FROM sky_eye_alerts WHERE jpeg IS NOT NULL", Map.of())).isEmpty();
     }
 
     private Map<String,Object> changes(){return p("routines",List.of(),"deletedRoutines",List.of(),"sleepRecords",List.of(),"deletedSleepRecords",List.of());}

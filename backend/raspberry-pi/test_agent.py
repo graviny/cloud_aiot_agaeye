@@ -116,7 +116,7 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(self.agent.read('unlink-request.json')['deviceId'], target)
         with patch.object(self.agent, '_send') as send:
             with self.assertRaisesRegex(ValueError, 'pending'): self.agent.request('/device/heartbeat', {}, device=True)
-            with self.assertRaisesRegex(ValueError, 'pending'): self.agent.send_frame('fixture', b'jpeg')
+            with self.assertRaisesRegex(ValueError, 'pending'): self.agent.send_photo('alert', 'fixture', b'jpeg')
             with self.assertRaisesRegex(ValueError, 'pending'): self.agent.pair()
         send.assert_not_called()
         restarted = Agent(self.agent.api_url, self.agent.state_dir)

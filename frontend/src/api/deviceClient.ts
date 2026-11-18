@@ -72,7 +72,7 @@ export class DeviceClient {
     }
     if (response.ok && format === 'image') {
       if (response.status === 204) return null as T;
-      if (!response.headers.get('content-type')?.startsWith('image/jpeg')) throw new Error('카메라 응답이 올바른 영상 형식이 아니에요.');
+      if (!response.headers.get('content-type')?.startsWith('image/jpeg')) throw new Error('알림 사진 형식을 확인할 수 없어요.');
       return await response.blob() as T;
     }
     const data = await response.json().catch(() => null);
@@ -102,7 +102,7 @@ export class DeviceClient {
   approve(workspace: string, childId: string, code: string, name: string, key: string) { return this.request('POST', '/device-pairings/approve', { code: normalizePairingCode(code), childId, name }, workspace, key); }
   unlink(workspace: string, device: string) { return this.request('DELETE', `/devices/${encodeURIComponent(device)}`, undefined, workspace); }
   skyEye(workspace: string, child: string) { return this.request<SkySnapshot>('GET', `/children/${encodeURIComponent(child)}/sky-eye`, undefined, workspace); }
-  cameraFrame(workspace: string, child: string, device: string) { return this.request<Blob | null>('GET', `/children/${encodeURIComponent(child)}/devices/${encodeURIComponent(device)}/camera/frame`, undefined, workspace, undefined, true, 'image'); }
+  alertPhoto(workspace: string, child: string, device: string, alert: string) { return this.request<Blob | null>('GET', `/children/${encodeURIComponent(child)}/devices/${encodeURIComponent(device)}/alerts/${encodeURIComponent(alert)}/photo`, undefined, workspace, undefined, true, 'image'); }
   careHistory<T>(workspace: string, child: string, kind: HistoryKind, cursor: string | null = null) {
     const query = new URLSearchParams({ kind, limit: '100' }); if (cursor) query.set('cursor', cursor);
     return this.request<{ items: T[]; nextCursor: string | null }>('GET', `/children/${encodeURIComponent(child)}/care-history?${query}`, undefined, workspace);

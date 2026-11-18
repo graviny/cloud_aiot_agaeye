@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from urllib.error import URLError
 
 from agaeye_device import Agent, ApiError, AgentLock, parse_time
-from camera_forwarder import CameraForwarder
+from alert_camera import AlertCamera
 
 
 def number(value, low=None, high=None):
@@ -112,6 +112,7 @@ def map_event(raw):
 class Bridge:
     def __init__(self, agent, root):
         self.agent, self.root = agent, Path(root).expanduser().resolve()
+        self.camera = None
         self.output = self.root / 'output'
         self.checkpoint = agent.read('bridge-cursor.json') or {}
 
@@ -136,7 +137,7 @@ class Bridge:
         except (OSError, ValueError, TypeError, KeyError):
             status = unavailable(now)
         try:
-            self.agent.request('/device/sky-eye/status', status, device=True)
+            self.report('/device/sky-eye/status', status)
         except ApiError as error:
             if error.code != 'STALE_MODEL_STATUS':
                 raise
@@ -170,7 +171,7 @@ class Bridge:
                 try:
                     body = map_event(json.loads(line))
                     if body:
-                        self.agent.request('/device/sky-eye/events', body, device=True)
+                        self.report('/device/sky-eye/events', body)
                 except (ValueError, TypeError, KeyError):
                     self.reject(offset, line, 'invalid_event')
                 except ApiError as error:
@@ -189,12 +190,13 @@ class Bridge:
         print('Skipped an invalid model event; see bridge-errors.json.', flush=True)
 
     def run(self, once=False, preview_port=8765, camera=True):
-        self.forwarder = CameraForwarder(self.agent, preview_port) if camera and not once else None
-        try:
-            self._run(once)
-        finally:
-            if self.forwarder:
-                self.forwarder.stop()
+        self.camera = AlertCamera(self.agent, preview_port) if camera else None
+        self._run(once)
+
+    def report(self, path, body):
+        receipt = self.agent.request(path, body, device=True)
+        if self.camera and receipt.get('captures'):
+            self.camera.fulfill(receipt['captures'])
 
     def _run(self, once=False):
         self.agent.load_key()
@@ -205,8 +207,6 @@ class Bridge:
                     self.agent.authenticate()
                     self.bind()
                     authenticated = True
-                    if self.forwarder:
-                        self.forwarder.start()
                 self.status()
                 self.events()
                 if once:
@@ -239,7 +239,7 @@ def main():
     parser.add_argument('--allow-http', action='store_true')
     parser.add_argument('--once', action='store_true')
     parser.add_argument('--preview-port', type=int, default=8765)
-    parser.add_argument('--no-camera', action='store_true', help='Send observations only, without preview frames')
+    parser.add_argument('--no-camera', action='store_true', help='Send observations only, without alert photos')
     args = parser.parse_args()
     if not args.api_url:
         parser.error('--api-url or AGAEYE_API_URL is required')
