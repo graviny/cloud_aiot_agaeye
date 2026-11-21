@@ -13,8 +13,8 @@ import static com.agaeye.common.Db.*;
 @Service
 public class MonitoringWatchdog {
     private final Db db;private final EventService events;private final int stale;private final boolean enabled;
-    public MonitoringWatchdog(Db db,EventService events,@Value("${app.monitoring-stale-seconds:30}")int stale,@Value("${app.outbox-enabled:true}")boolean enabled){this.db=db;this.events=events;this.stale=stale;this.enabled=enabled;}
-    @Scheduled(fixedDelay=5000) @Transactional
+    public MonitoringWatchdog(Db db,EventService events,@Value("${app.offline-after-seconds:7}")int stale,@Value("${app.outbox-enabled:true}")boolean enabled){this.db=db;this.events=events;this.stale=stale;this.enabled=enabled;}
+    @Scheduled(fixedDelayString="${app.offline-check-interval-ms:1000}") @Transactional
     public void check(){if(!enabled)return;
         var rows=db.list("SELECT d.* FROM devices d JOIN workspace_children wc ON wc.id=d.workspace_child_id WHERE d.revoked_at IS NULL AND d.device_type='camera' AND d.state IN ('live','unverifiable') AND d.last_seen_at<:before AND wc.link_status='active' AND (wc.share_grant_id IS NULL OR EXISTS(SELECT 1 FROM data_share_grants s WHERE s.id=wc.share_grant_id AND s.revoked_at IS NULL AND s.expires_at>now())) ORDER BY d.last_seen_at LIMIT 50 FOR UPDATE OF d SKIP LOCKED",p("before",Instant.now().minusSeconds(stale)));
         for(var device:rows){

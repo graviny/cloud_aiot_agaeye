@@ -551,4 +551,20 @@ class ApiIntegrationTest {
         var denied=mvc.perform(options("/api/v1/children").header("Origin","https://other.example").header("Access-Control-Request-Method","GET")).andReturn().getResponse();
         assertThat(denied.getStatus()).isEqualTo(403);
     }
+
+    @Autowired com.agaeye.detection.EventService detectionEvents;@Autowired org.springframework.core.env.Environment environment;
+    @Test void lostCameraIsReportedWithinTenSeconds()throws Exception{
+        // NFR-03: power or network loss must reach the guardian within 10 s.
+        assertThat(environment.getProperty("app.offline-after-seconds",Integer.class)).isEqualTo(7);
+        assertThat(environment.getProperty("app.offline-check-interval-ms",Integer.class)).isEqualTo(1000);
+        var owner=user();UUID child=uuid(child(owner),"id"),camera=camera(owner,child);heartbeat(camera,"live");
+        // The scheduled bean is disabled in tests (outbox-enabled=false), so run the same check directly.
+        var watchdog=new com.agaeye.monitoring.MonitoringWatchdog(db,detectionEvents,7,true);
+        db.update("UPDATE devices SET last_seen_at=now()-interval '6 seconds' WHERE id=:id",p("id",camera));watchdog.check();
+        assertThat(db.required("SELECT state FROM devices WHERE id=:id",p("id",camera),"MISSING").get("state")).isEqualTo("live");
+        assertThat(db.list("SELECT id FROM detection_events WHERE source_id=:id AND type='connection_lost'",p("id",camera))).isEmpty();
+        db.update("UPDATE devices SET last_seen_at=now()-interval '8 seconds' WHERE id=:id",p("id",camera));watchdog.check();
+        assertThat(db.required("SELECT state FROM devices WHERE id=:id",p("id",camera),"MISSING").get("state")).isEqualTo("offline");
+        assertThat(db.list("SELECT id FROM detection_events WHERE source_id=:id AND type='connection_lost'",p("id",camera))).hasSize(1);
+    }
 }

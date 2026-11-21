@@ -8,6 +8,7 @@ import com.agaeye.security.Policy.Actor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
@@ -33,8 +34,9 @@ public class SkyEyeService {
         @NotNull Instant observedAt,Instant startedAt,Instant endedAt,UUID episodeUid,
         @Pattern(regexp="quiet|input_gap|segment_limit|service_stopped|interrupted") String endReason) {}
     private final Db db; private final PairingService pairing; private final Policy policy;
-    private final MonitoringService monitoring; private final ObjectMapper mapper; private final AlertPhotos camera;
-    public SkyEyeService(Db db,PairingService pairing,Policy policy,MonitoringService monitoring,ObjectMapper mapper,AlertPhotos camera) {
+    private final MonitoringService monitoring; private final ObjectMapper mapper; private final AlertPhotos camera; private final int offlineAfter;
+    public SkyEyeService(Db db,PairingService pairing,Policy policy,MonitoringService monitoring,ObjectMapper mapper,AlertPhotos camera,@Value("${app.offline-after-seconds:7}")int offlineAfter) {
+        this.offlineAfter=offlineAfter;
         this.db=db;this.pairing=pairing;this.policy=policy;this.monitoring=monitoring;this.mapper=mapper;this.camera=camera;
     }
     private static boolean fresh(Instant at,Instant now,int seconds) {
@@ -105,7 +107,7 @@ public class SkyEyeService {
         for(var row:devices) {
             UUID device=id(row,"device_id");
             var status=row.get("body")!=null?effective(mapper.convertValue(row.get("body"),Status.class),now):new Status(instant(row,"created_at"),new Camera(false,null,null,null,"unavailable",null,null,false,"unavailable",null));
-            boolean connected=fresh(instant(row,"last_seen_at"),now,15);
+            boolean connected=fresh(instant(row,"last_seen_at"),now,offlineAfter);
             String reportState=row.get("received_at")==null?(connected?"awaiting_model":"awaiting_sender"):!connected?"offline":!status.video().available()?"input_unavailable":"receiving";
             var events=db.list("SELECT body,received_at FROM sky_eye_events WHERE device_id=:device ORDER BY observed_at DESC,event_id LIMIT 30",p("device",device));
             var eventViews=events.stream().map(e->{var event=mapper.convertValue(e.get("body"),Event.class);return p("event",event,"recent",fresh(event.observedAt(),now,30)&&fresh(instant(e,"received_at"),now,30));}).toList();

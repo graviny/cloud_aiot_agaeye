@@ -67,6 +67,10 @@ app:
   outbox-enabled: ${OUTBOX_ENABLED:true}
   outbox-interval-ms: 1000
   monitoring-stale-seconds: 30
+  # NFR-03: report a lost camera within 10 s. The Pi reports every 2 s, so 7 s needs three missed
+  # reports in a row. Worst case: 7 s + 1 s check + ~1 s outbox = ~9 s (measured locally).
+  offline-after-seconds: ${OFFLINE_AFTER_SECONDS:7}
+  offline-check-interval-ms: ${OFFLINE_CHECK_INTERVAL_MS:1000}
   confidence-threshold: 0.6
 logging:
   level:

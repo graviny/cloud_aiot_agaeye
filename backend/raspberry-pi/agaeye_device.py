@@ -19,6 +19,9 @@ from urllib.request import Request, HTTPRedirectHandler, build_opener
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+# Must stay well under the server's offline threshold (app.offline-after-seconds, 7 s).
+HEARTBEAT_SECONDS = 2
+
 
 class ApiError(Exception):
     def __init__(self, status, code):
@@ -257,7 +260,8 @@ class Agent:
                     print("Heartbeat accepted.")
                     return
                 delay = 3
-                time.sleep(10)
+                # The server marks a camera offline after 7 s without reports (NFR-03: 10 s).
+                time.sleep(HEARTBEAT_SECONDS)
             except ApiError as error:
                 if error.code == "DEVICE_NOT_PAIRED":
                     raise
