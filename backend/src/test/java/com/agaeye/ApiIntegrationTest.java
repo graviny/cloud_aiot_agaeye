@@ -542,4 +542,13 @@ class ApiIntegrationTest {
         assertThat(db.list("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('cry_occurrences','care_feedback','action_attempts','recommendations','cause_candidates','sky_eye_commands')",Map.of())).isEmpty();
     }
 
+    @Test void webOnAnotherOriginCanCallTheApi()throws Exception{
+        // Deployed web and API live on different origins, so every browser call is preflighted.
+        var allowed=mvc.perform(options("/api/v1/children/x/care-history").header("Origin","http://localhost:5177")
+            .header("Access-Control-Request-Method","PUT").header("Access-Control-Request-Headers","authorization,content-type,x-workspace-id,idempotency-key")).andReturn().getResponse();
+        assertThat(allowed.getStatus()).isEqualTo(200);
+        assertThat(allowed.getHeader("Access-Control-Allow-Origin")).isEqualTo("http://localhost:5177");
+        var denied=mvc.perform(options("/api/v1/children").header("Origin","https://other.example").header("Access-Control-Request-Method","GET")).andReturn().getResponse();
+        assertThat(denied.getStatus()).isEqualTo(403);
+    }
 }
