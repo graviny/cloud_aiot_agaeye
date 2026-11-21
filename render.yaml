@@ -1,0 +1,71 @@
+# Render Blueprint for the Spring Boot API + React web. Creates free services only.
+# Database: an existing Supabase project used as plain PostgreSQL (Session pooler, port 5432).
+# Values marked sync:false are entered in the Render dashboard and never committed.
+services:
+  - type: web
+    name: agaeye-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    autoDeployTrigger: off
+    envVars:
+      # jdbc:postgresql://<pooler host>:5432/postgres?currentSchema=agaeye&sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      # Keep all tables in their own schema so the project can host other data in `public`.
+      - key: SPRING_FLYWAY_DEFAULT_SCHEMA
+        value: agaeye
+      # Supabase's free Session pooler allows only a few clients per project.
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "5"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WORKER_KEY
+        generateValue: true
+      # Free instances have 512 MB. -Xmx overrides the image's MaxRAMPercentage=75, which
+      # together with metaspace and threads would exceed the limit. Measured: ~230 MB, 31 s start.
+      - key: JAVA_TOOL_OPTIONS
+        value: -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -Xss512k
+      # Class demo settings: `production`/`staging` require an SMTP server and reject requests
+      # that Render's TLS proxy forwards as plain HTTP. Signup works by username without mail.
+      - key: APP_ENV
+        value: development
+      - key: MAIL_MODE
+        value: local
+      # Exact web origin(s), comma separated, e.g. https://agaeye-web.onrender.com
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+  - type: web
+    name: agaeye-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # API origin, e.g. https://agaeye-api.onrender.com
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
