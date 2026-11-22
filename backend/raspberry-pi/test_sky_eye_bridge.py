@@ -6,7 +6,7 @@ import tempfile
 import time
 import unittest
 import uuid
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.error import URLError
 from agaeye_device import Agent, AgentLock
 from sky_eye_bridge import Bridge, map_status, map_event, timestamp
@@ -97,6 +97,16 @@ class DeliveryTests(unittest.TestCase):
         self.bridge.bind()
         self.agent.credential['deviceId'] = 'new-child-binding'
         with self.assertRaises(ValueError): self.bridge.bind()
+
+    def test_periodic_worker_continues_after_network_failure_without_replaying_a_frame(self):
+        stop = Mock()
+        stop.is_set.side_effect = [False, False, True]
+        self.bridge.camera = Mock()
+        self.bridge.camera.capture_latest.side_effect = [URLError('offline'), None]
+        with patch('sky_eye_bridge.time.monotonic', side_effect=[0, 1, 4, 9]):
+            self.bridge.upload_captures(4, stop)
+        self.assertEqual(self.bridge.camera.capture_latest.call_count, 2)
+        self.assertEqual([call.args for call in stop.wait.call_args_list], [(3,), (0,)])
 
 
 if __name__ == '__main__': unittest.main()

@@ -128,12 +128,22 @@ class Agent:
         return self._send(request)
 
     def send_photo(self, alert_id, captured_at, jpeg):
+        headers = self._jpeg_headers({'X-Frame-Captured-At': captured_at})
+        path = '/api/v1/device/alerts/' + str(uuid.UUID(alert_id)) + '/photo'
+        return self._send(Request(self.api_url + path, data=jpeg, headers=headers), timeout=3)
+
+    def send_capture(self, metadata, jpeg):
+        headers = self._jpeg_headers(metadata)
+        path = '/api/v1/device/sky-eye/capture'
+        return self._send(Request(self.api_url + path, data=jpeg, headers=headers), timeout=3)
+
+    def _jpeg_headers(self, metadata):
         self.require_linked_local_state()
-        if not self.credential:
-            raise ValueError("Pair the device before sending an alert photo.")
-        headers = {"Content-Type": "image/jpeg", "Accept": "application/json",
-                   "X-Device-Token": self.credential["accessToken"], "X-Frame-Captured-At": captured_at}
-        return self._send(Request(self.api_url + "/api/v1/device/alerts/" + str(uuid.UUID(alert_id)) + "/photo", data=jpeg, headers=headers), timeout=3)
+        credential = self.credential
+        if not credential:
+            raise ValueError("Pair the device before sending a photo.")
+        return {**metadata, "Content-Type": "image/jpeg", "Accept": "application/json",
+                "X-Device-Token": credential["accessToken"]}
 
     def _send(self, request, timeout=15):
         try:

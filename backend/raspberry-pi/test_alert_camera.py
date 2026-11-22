@@ -42,3 +42,19 @@ class AlertCameraTests(unittest.TestCase):
         self.agent.send_photo.assert_not_called()
         with self.assertRaises(ValueError):
             frame_time({'wall_time_unix': self.now, 'preview_age_s': 10}, self.now)
+
+    def test_periodic_upload_uses_metadata_from_the_jpeg_response(self):
+        headers = {'X-Frame-Captured-At': self.alert['observedAt'], 'X-Frame-State': 'risk',
+                   'X-Frame-Posture': 'prone', 'Unrelated': 'ignored'}
+        with patch.object(self.camera, 'read_response', return_value=(self.jpeg, headers)) as read:
+            self.camera.capture_latest()
+        read.assert_called_once_with('/frame.jpg', 524288)
+        del headers['Unrelated']
+        self.agent.send_capture.assert_called_once_with(headers, self.jpeg)
+
+    def test_periodic_upload_skips_missing_metadata_or_an_old_frame(self):
+        for headers in ({}, {'X-Frame-Captured-At': '2020-01-01T00:00:00Z', 'X-Frame-State': 'normal'}):
+            with patch.object(self.camera, 'read_response', return_value=(self.jpeg, headers)):
+                with self.assertRaises(ValueError):
+                    self.camera.capture_latest()
+        self.agent.send_capture.assert_not_called()

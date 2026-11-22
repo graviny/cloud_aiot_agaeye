@@ -131,6 +131,7 @@ public class PairingService {
     }
     private void revoke(Map<String,Object> found){
         UUID id=id(found,"id");
+        db.update("DELETE FROM sky_eye_latest_captures WHERE device_id=:id",p("id",id));
         db.update("UPDATE devices SET revoked_at=COALESCE(revoked_at,now()),state='offline' WHERE id=:id",p("id",id));db.update("UPDATE device_identities SET active_device_id=NULL WHERE id=:identity AND active_device_id=:device",p("identity",found.get("identity_id"),"device",id));
         db.update("UPDATE device_credentials SET revoked_at=COALESCE(revoked_at,now()) WHERE device_id=:id",p("id",id));db.update("UPDATE device_pairings SET status='cancelled' WHERE device_id=:id",p("id",id));db.update("UPDATE stream_access_tokens SET revoked_at=now() WHERE device_id=:id AND revoked_at IS NULL",p("id",id));db.update("UPDATE monitoring_sessions SET ended_at=last_updated_at WHERE source_id=:id AND ended_at IS NULL",p("id",id));
     }
