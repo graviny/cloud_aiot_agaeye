@@ -61,12 +61,14 @@ class PreviewServer:
     def publish(self, frame, result, captured):
         captured_at = time.time() - (time.monotonic() - captured)
         posture = result['posture']
-        state = result['posture_state'] if posture['valid'] else 'unavailable'
+        # Report the monitor state that status.json also sends. An active risk stays
+        # "risk" even when this one frame cannot be analysed (e.g. the face is hidden).
+        state = result['posture_state']
         headers = {
             'X-Frame-Captured-At': datetime.fromtimestamp(captured_at, timezone.utc).isoformat(),
             'X-Frame-State': state,
         }
-        if state != 'unavailable':
+        if posture['valid'] and state != 'unavailable':
             if posture['posture'] is not None:
                 headers['X-Frame-Posture'] = posture['posture']
             if posture['airway'] is not None:
