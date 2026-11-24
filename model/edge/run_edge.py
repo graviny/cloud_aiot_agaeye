@@ -3,6 +3,7 @@
 노트북 웹캠:   python edge/run_edge.py --source 0 --show
 영상 파일:     python edge/run_edge.py --source test.mp4 --show
 라즈베리파이 4: python edge/run_edge.py --source picamera2 --server http://<서버IP>:8000
+팀 백엔드 브리지: python edge/run_edge.py --source picamera2 --bridge-dir ~/agaeye-edge
 설정 기본값은 configs/edge.yaml (명령줄 옵션이 우선)
 """
 from __future__ import annotations
@@ -29,6 +30,8 @@ def parse_args(argv=None):
     ap.add_argument("--infer-fps", type=float)
     ap.add_argument("--server", help="웹 알림 서버 주소 (예: http://192.168.0.10:8000)")
     ap.add_argument("--device-id")
+    ap.add_argument("--bridge-dir", help="브리지가 읽을 폴더 (<폴더>/output/status.json, events.jsonl)")
+    ap.add_argument("--preview-port", type=int, help="알림 사진용 프레임 서버 포트 (브리지 기본값 8765)")
     ap.add_argument("--show", action="store_true", help="화면에 결과 표시 (q로 종료)")
     ap.add_argument("--max-seconds", type=float, help="이 시간(입력 기준)만큼만 실행")
     ap.add_argument("--stats-every", type=float, default=10.0,
@@ -54,7 +57,9 @@ def main(argv=None) -> None:
 
     from agaeye.detector_onnx import OnnxDetector
     from agaeye.imaging import brightness, draw, encode_jpeg_b64
+    from agaeye.bridge_output import BridgeFileNotifier
     from agaeye.notify import ConsoleNotifier, HttpNotifier
+    from agaeye.preview import PreviewServer
     from agaeye.sources import open_source
 
     args = parse_args(argv)
@@ -65,15 +70,25 @@ def main(argv=None) -> None:
     server = args.server or cfg["server"].get("url")
     device_id = args.device_id or cfg["server"]["device_id"]
     snap = cfg.get("snapshot", {})
+    bridge = cfg.get("bridge", {})
+    bridge_dir = args.bridge_dir or bridge.get("dir")
 
     detector = OnnxDetector(model_path, imgsz=args.imgsz or cfg.get("imgsz"),
                             conf=min(cfg["conf_body"], cfg["conf_airway"]), threads=cfg.get("threads"))
     monitor = RiskMonitor(RiskConfig(**cfg["risk"]))
-    notifier = (HttpNotifier(server, device_id, heartbeat_s=cfg["server"].get("heartbeat_s", 2.0))
-                if server else ConsoleNotifier())
+    preview = None
+    if bridge_dir:
+        notifier, target = BridgeFileNotifier(bridge_dir), f"브리지 파일 {bridge_dir}"
+        if snap.get("enabled", True):
+            preview = PreviewServer(args.preview_port or bridge.get("preview_port", 8765),
+                                    snap.get("jpeg_quality", 80), snap.get("max_width", 640))
+    elif server:
+        notifier = HttpNotifier(server, device_id, heartbeat_s=cfg["server"].get("heartbeat_s", 2.0))
+        target = f"서버 {server}"
+    else:
+        notifier, target = ConsoleNotifier(), "콘솔"
     source = open_source(str(args.source), tuple(cfg.get("camera_size", (640, 480))))
-    print(f"모델 {model_path.name} (입력 {detector.imgsz}), 입력 {args.source}, "
-          f"알림 {'서버 ' + server if server else '콘솔'}")
+    print(f"모델 {model_path.name} (입력 {detector.imgsz}), 입력 {args.source}, 알림 {target}")
 
     settings_version = 0
     origin = None          # 입력 시각 → 실제 시각 변환용
@@ -104,6 +119,8 @@ def main(argv=None) -> None:
                 decision = decide(dets, cfg["conf_body"], cfg["conf_airway"],
                                   cfg.get("covered_without_body", False))
             infer_ms = (time.perf_counter() - t0) * 1000
+            if preview:
+                preview.update(frame, origin + ts)
             if args.stats_every > 0:
                 stats_start = ts if stats_start is None else stats_start
                 stats_ms.append(infer_ms)
@@ -129,6 +146,8 @@ def main(argv=None) -> None:
             notifier.update_status({
                 "ts": round(origin + ts, 3), "status": monitor.status, "reason": monitor.reason,
                 "posture": decision.posture, "airway": decision.airway,
+                "body_conf": round(decision.body.conf, 3) if decision.body else None,
+                "face_conf": round(decision.face.conf, 3) if decision.face else None,
                 "elapsed": {k: round(v, 1) for k, v in monitor.elapsed(ts).items()},
                 "active_event_id": monitor.active.event_id if monitor.active else None,
                 "fps": round(fps, 2), "infer_ms": round(infer_ms, 1),
@@ -150,6 +169,8 @@ def main(argv=None) -> None:
     finally:
         source.close()
         notifier.close()
+        if preview:
+            preview.close()
         if args.show:
             cv2.destroyAllWindows()
 

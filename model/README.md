@@ -58,6 +58,19 @@ python edge/run_edge.py --source picamera2 --server http://<서버 주소>
 - `--server`가 없으면 결과를 콘솔에만 출력합니다.
 - 카메라는 침대 위에서 수직으로 내려다보게 설치합니다. 학습 사진이 그 각도입니다.
 
+### 팀 백엔드로 보내기
+
+파이 브리지(`backend/raspberry-pi/sky_eye_bridge.py`)가 읽는 파일 형식으로 결과를 씁니다. 기기 페어링은 `backend/raspberry-pi` 안내를 따릅니다.
+
+```bash
+python edge/run_edge.py --source picamera2 --bridge-dir ~/agaeye-edge
+python3 sky_eye_bridge.py --api-url http://<PC 서버 주소>:8081 --sky-eye-dir ~/agaeye-edge --allow-http
+```
+
+- 상태는 판정마다 `output/status.json`에, 위험 시작·종료는 `output/events.jsonl`에 씁니다.
+- 알림 사진은 브리지가 `127.0.0.1:8765`에서 최신 프레임을 가져갑니다.
+- 백엔드는 신뢰도 0.6 미만인 자세·얼굴 값을 화면 표시에 쓰지 않습니다. 위험 이벤트는 그대로 전달됩니다.
+
 ## 학습 재현 (GPU PC)
 
 PyTorch를 CUDA 버전에 맞춰 먼저 설치한 뒤 실행합니다.

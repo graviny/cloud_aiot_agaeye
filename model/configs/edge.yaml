@@ -25,6 +25,10 @@ server:
   device_id: crib-01
   heartbeat_s: 2.0        # 생존 신호 주기
 
+bridge:                   # 팀 백엔드의 파이 브리지로 보낼 때 (server.url 대신 사용)
+  dir: null               # 예: ~/agaeye-edge → ~/agaeye-edge/output/status.json, events.jsonl
+  preview_port: 8765      # 알림 사진용 프레임 서버 (127.0.0.1만)
+
 snapshot:
   enabled: true
   jpeg_quality: 80
