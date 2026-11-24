@@ -43,6 +43,17 @@ export function eventLabel(event: ModelEvent) {
   const kind = ({ risk_started: '위험 의심 감지', risk_ended: '모델 위험 구간 종료', risk_interrupted: '관찰 중단', status_changed: '상태 변경', posture_changed: '자세 변경' } as Record<string, string>)[event.kind] || event.kind;
   return `${risk} · ${kind}`;
 }
+const frameStates: Record<string, { label: string; tone: string }> = {
+  normal: { label: '관측 정상', tone: 'green' }, caution: { label: '확인 필요', tone: 'yellow' },
+  risk: { label: '위험 의심', tone: 'red' }, unavailable: { label: '판정 불가', tone: 'gray' },
+};
+const frameDetails: Record<string, string> = { supine: '바로 누움', side: '옆으로 누움', prone: '엎드림', airway_visible: '코·입 보임', airway_covered: '코·입 가림' };
+/** The model's result for one periodic capture, worded as an observation at that moment. */
+export function captureSummary(capture: { state: string; posture: string | null; airway: string | null }) {
+  const state = frameStates[capture.state] || frameStates.unavailable;
+  const details = [capture.posture, capture.airway].map(value => value && frameDetails[value]).filter(Boolean).join(' · ');
+  return { label: state.label, tone: state.tone, details };
+}
 // Expire the cached response during a disconnected network or a hanging request.
 // Server time plus elapsed time avoids trusting a skewed client clock.
 export function currentSnapshot(snapshot: SkySnapshot | null, receivedAt: number, now: number): SkySnapshot | null {

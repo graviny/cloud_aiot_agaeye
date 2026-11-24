@@ -1,10 +1,11 @@
 import { useId, useState } from 'react';
-import { Camera, ChevronRight, CircleHelp, ShieldCheck, Thermometer, Droplets } from 'lucide-react';
+import { Camera, ChevronRight, CircleHelp, Image as ImageIcon, ShieldCheck, Thermometer, Droplets } from 'lucide-react';
 import { Badge, Button, PageHeader, SectionHeader } from '../components';
 import { useApp } from '../context';
 import { getSleepRisk } from '../domain';
 import { SkyEyeSafety } from '../components/SkyEyePanel';
 import { AlertPhoto, alertTime } from '../components/AlertPhoto';
+import { LatestCapture } from '../components/LatestCapture';
 import { alertLabel, listAlerts } from '../skyEye';
 function MonitorHelp() {
     const [open, setOpen] = useState(false);
@@ -45,7 +46,10 @@ export function Monitor({ onAlert }: { onAlert: () => void }) {
                 </button>)}</div>
             : <p className="alert-photo-empty">{sky.error || (sky.loading ? '알림을 불러오고 있어요.' : '아직 수면 알림이 없어요. 알림이 생기면 이곳에서 사진을 확인할 수 있어요.')}</p>}
             <MonitorHelp/>
-        </section><div className="monitor-side"><section className="card"><SectionHeader title="수면 환경 점검" icon={<ShieldCheck size={19}/>}/><p className="section-description">카메라 연결 후 감지 상태를 표시해요.</p>{data.demo ? <div className="safety-list">{['아기 자세', '얼굴 노출', '주변 물체', '가장자리 접근'].map(label => <div key={label} className={label === '아기 자세' && data.alert?.kind === 'posture' && data.alert.childId === data.child?.id && data.alert.status !== 'resolved' ? 'posture-risk-highlight' : undefined}><span><ShieldCheck size={17}/>{label}</span><Badge tone={active && getSleepRisk(data.alert!).label === label ? 'red' : 'gray'}>{active && getSleepRisk(data.alert!).label === label ? '위험 의심 · 시연' : '확인 불가'}</Badge></div>)}</div> : <SkyEyeSafety/>}</section><section className="card environment-disabled" aria-label="아이의 주변 환경" aria-disabled="true"><div className="section-heading"><h2>아이의 주변 환경</h2><Badge tone="gray">비활성화</Badge></div><p className="section-description">주변 환경 기능은 현재 비활성화되어 있어요.</p><div className="sensor-cards"><div><Thermometer /><span>실내 온도</span><strong>—</strong><small>사용 안 함</small></div><div><Droplets /><span>실내 습도</span><strong>—</strong><small>사용 안 함</small></div></div></section></div>
+        </section><div className="monitor-side">{!data.demo && snapshot?.items.length ? <section className="card"><SectionHeader title="최근 카메라 사진" icon={<ImageIcon size={19}/>}/>
+            <p className="section-description">파이가 정해진 간격마다 찍어 보낸 사진이에요. 실시간 영상이 아니에요.</p>
+            {snapshot.items.map(item => <LatestCapture key={item.deviceId} device={item.deviceId} name={item.name} showName={snapshot.items.length > 1}/>)}
+        </section> : null}<section className="card"><SectionHeader title="수면 환경 점검" icon={<ShieldCheck size={19}/>}/><p className="section-description">카메라 연결 후 감지 상태를 표시해요.</p>{data.demo ? <div className="safety-list">{['아기 자세', '얼굴 노출', '주변 물체', '가장자리 접근'].map(label => <div key={label} className={label === '아기 자세' && data.alert?.kind === 'posture' && data.alert.childId === data.child?.id && data.alert.status !== 'resolved' ? 'posture-risk-highlight' : undefined}><span><ShieldCheck size={17}/>{label}</span><Badge tone={active && getSleepRisk(data.alert!).label === label ? 'red' : 'gray'}>{active && getSleepRisk(data.alert!).label === label ? '위험 의심 · 시연' : '확인 불가'}</Badge></div>)}</div> : <SkyEyeSafety/>}</section><section className="card environment-disabled" aria-label="아이의 주변 환경" aria-disabled="true"><div className="section-heading"><h2>아이의 주변 환경</h2><Badge tone="gray">비활성화</Badge></div><p className="section-description">주변 환경 기능은 현재 비활성화되어 있어요.</p><div className="sensor-cards"><div><Thermometer /><span>실내 온도</span><strong>—</strong><small>사용 안 함</small></div><div><Droplets /><span>실내 습도</span><strong>—</strong><small>사용 안 함</small></div></div></section></div>
         </div>
     </>;
 }
