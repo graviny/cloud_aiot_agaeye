@@ -28,13 +28,10 @@ YOLOv8n, 입력 320×320
 
 ## 모델 받기
 
-가중치는 [릴리즈 model-v1](https://github.com/graviny/cloud_aiot_agaeye/releases/tag/model-v1)에 있습니다.
+가중치는 [릴리즈 model-v1](https://github.com/graviny/cloud_aiot_agaeye/releases/tag/model-v1)에 있습니다. 아래 명령이 받아서 SHA256까지 확인합니다.
 
 ```bash
-curl -L --create-dirs -o models/agaeye_A_original_320_aug.onnx \
-  https://github.com/graviny/cloud_aiot_agaeye/releases/download/model-v1/agaeye_A_original_320_aug.onnx
-sha256sum models/agaeye_A_original_320_aug.onnx
-# e2546caef8500e8aaa80b0edec071d77f3b0975daccf560416dc64e8ddc73352
+python scripts/download_model.py
 ```
 
 ## 실시간 실행
