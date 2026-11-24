@@ -75,6 +75,7 @@ python scripts/run_experiments.py
 - 결과는 `results/summary.csv`, ONNX는 `models/agaeye_<실험이름>.onnx`에 저장됩니다.
 - 학습 설정은 Pirotello 외(SBCUP 2026)를 따랐습니다: 200에폭, patience 50, Adam, 학습률 0.001 고정, 배치 16.
 - 배포 모델(`A_original_320_aug`)은 좌우 반전·밝기 변형 증강을 켰습니다.
+- `pytest`로 판정·위험 시간·후처리·데이터 정리 테스트를 실행합니다.
 
 ## 결과
 
