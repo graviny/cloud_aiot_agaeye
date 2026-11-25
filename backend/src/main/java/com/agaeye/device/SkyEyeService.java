@@ -72,10 +72,12 @@ public class SkyEyeService {
         Double confidence=confident(v.bodyConfidence())?v.bodyConfidence():confident(v.faceConfidence())?v.faceConfidence():null;
         monitoring.heartbeat(deviceId,new MonitoringService.Heartbeat(Instant.now(),confidence==null?"unverifiable":"live",safety,confidence,v.observedAt()));
         Instant at = v.available() ? v.observedAt() : current.observedAt();
+        // Risk alerts come only from the Pi's risk_started events, which apply the model's duration
+        // rules (e.g. prone for 5 s). A single 2 s status sample must not raise one, so status only
+        // tells whether the camera can see the child; a long unknown period still alerts.
         if (fresh(at,Instant.now(),8)) {
-            for (String field : List.of("posture","face")) camera.observe(deviceId,field,safety.get(field),at);
-            if (v.available() && v.geometryValid())
-                camera.observe(deviceId,"edge",safety.get("edge").equals("caution") ? "caution" : "stable",at);
+            for (String field : List.of("posture","face"))
+                camera.observe(deviceId,field,"unknown".equals(safety.get(field)) ? "unknown" : "stable",at);
         }
         return p("accepted",true,"captures",camera.awaitingCapture(deviceId));
     }
@@ -95,8 +97,9 @@ public class SkyEyeService {
                 case "edge_departure_warning" -> "edge";
                 default -> "observation";
             };
-            if ("observation".equals(field)) camera.create(deviceId,field,"caution",body.observedAt());
-            else camera.observe(deviceId,field,field.equals("edge") ? "caution" : "immediate",body.observedAt());
+            // Each new risk_started event is one episode judged by the Pi, so it is one alert.
+            String level = field.equals("posture") || field.equals("face") ? "immediate" : "caution";
+            camera.create(deviceId,field,level,body.observedAt());
         }
         return p("accepted",true,"duplicate",existing.isPresent(),"captures",camera.awaitingCapture(deviceId));
     }

@@ -500,23 +500,27 @@ class ApiIntegrationTest {
         call("DELETE","/devices/"+device,owner,null,200);
         response(caregiver,404); response(uploadPhoto(token,alert,at,photo),401);
     }
-    @Test void sustainedPostureRiskProducesOneCaptureAndANewAlertAfterRecovery() throws Exception {
+    @Test void onlyThePisRiskEpisodesRaiseAlertsNotSingleStatusSamples() throws Exception {
         var owner=user(); UUID child=uuid(child(owner),"id"); var pi=pi(); approve(owner,child,pi,"camera",200);
         String token=poll(pi,200).path("accessToken").asText();
         Instant at=Instant.now();
-        var normal=skyStatus(at); assertThat(deviceCall("/sky-eye/status",token,normal,200).path("captures")).isEmpty();
-        var risk=skyStatus(at);
-        risk.put("video",p("available",true,"observedAt",at,"posture","prone","state","risk","bodyConfidence",0.95));
-        String first=deviceCall("/sky-eye/status",token,risk,200).path("captures").get(0).path("id").asText();
-        assertThat(deviceCall("/sky-eye/status",token,risk,200).path("captures")).hasSize(1);
-        assertThat(risk(token,"f","prone",at).path("captures").get(0).path("id").asText()).isEqualTo(first);
-        // Move the healthy interval into the past without sleeping through device polling.
-        deviceCall("/sky-eye/status",token,normal,200);
-        db.update("UPDATE sky_eye_notice_state SET stable_since=now()-interval '11 seconds' WHERE field='posture'", Map.of());
-        deviceCall("/sky-eye/status",token,normal,200);
-        deviceCall("/sky-eye/status",token,risk,200);
+        // A confident prone or covered sample is shown on the dashboard but is not yet a risk:
+        // the Pi decides that after its duration rule (5 s) and then sends risk_started.
+        var sample=skyStatus(at);
+        sample.put("video",p("available",true,"observedAt",at,"posture","prone","airway","airway_covered","state","risk",
+                "bodyConfidence",0.95,"faceConfidence",0.95,"geometryValid",true,"fallState","edge_departure_warning"));
+        assertThat(deviceCall("/sky-eye/status",token,sample,200).path("captures")).isEmpty();
+        var item=call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0);
+        assertThat(item.path("safety").path("posture").asText()).isEqualTo("immediate");
+        assertThat(item.path("alerts")).isEmpty();
+        String first=risk(token,"f","prone",at).path("captures").get(0).path("id").asText();
+        assertThat(risk(token,"f","prone",at).path("captures")).hasSize(1);
+        assertThat(deviceCall("/sky-eye/status",token,sample,200).path("captures").get(0).path("id").asText()).isEqualTo(first);
+        // The next episode is a new alert even without a recovery period on the server.
+        risk(token,"c","prone",at);
         var alerts=call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0).path("alerts");
         assertThat(alerts).hasSize(2);
+        assertThat(db.list("SELECT id FROM sky_eye_alerts WHERE level='immediate' AND field='posture'",Map.of())).hasSize(2);
     }
 
     @Test void unknownPostureWaitsForContinuousObservationsAndNeverUsesAnotherAlertsImage() throws Exception {
