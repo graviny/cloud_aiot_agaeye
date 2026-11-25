@@ -1,4 +1,4 @@
-"""Capture a local JPEG only for a specific newly detected alert."""
+"""Read JPEG captures from the loopback Sky Eye preview."""
 from datetime import datetime, timezone
 import json
 import math
@@ -9,6 +9,12 @@ from urllib.request import build_opener
 from agaeye_device import ApiError, NoRedirect, parse_time
 
 MAX_FRAME = 524288
+FRAME_HEADERS = ('X-Frame-Captured-At', 'X-Frame-State', 'X-Frame-Posture', 'X-Frame-Airway')
+
+
+def validate_jpeg(jpeg):
+    if not jpeg.startswith(b'\xff\xd8') or not jpeg.endswith(b'\xff\xd9'):
+        raise ValueError('Invalid preview JPEG')
 
 
 def frame_time(status, now):
@@ -28,12 +34,25 @@ class AlertCamera:
         self.pending = {}
 
     def read(self, path, limit):
+        return self.read_response(path, limit)[0]
+
+    def read_response(self, path, limit):
         # Device/user tokens are never sent to the preview server, even on redirects.
         with build_opener(NoRedirect()).open(self.origin + path, timeout=1) as response:
             data = response.read(limit + 1)
             if len(data) > limit:
                 raise ValueError('Preview response exceeds size limit')
-            return data
+            return data, response.headers
+
+    def capture_latest(self):
+        jpeg, headers = self.read_response('/frame.jpg', MAX_FRAME)
+        validate_jpeg(jpeg)
+        metadata = {name: headers[name] for name in FRAME_HEADERS if headers.get(name)}
+        if not all(name in metadata for name in FRAME_HEADERS[:2]):
+            raise ValueError('Preview is missing capture time or analysis. Update the Sky Eye runtime.')
+        if not -5 <= time.time() - parse_time(metadata['X-Frame-Captured-At']) <= 3:
+            raise ValueError('Preview capture is stale')
+        self.agent.send_capture(metadata, jpeg)
 
     def fulfill(self, requests):
         now = time.time()
@@ -51,8 +70,7 @@ class AlertCamera:
                     if abs(captured - observed) > 5:
                         continue
                     jpeg = self.read('/frame.jpg', MAX_FRAME)
-                    if not jpeg.startswith(b'\xff\xd8') or not jpeg.endswith(b'\xff\xd9'):
-                        raise ValueError('Invalid alert JPEG')
+                    validate_jpeg(jpeg)
                     frame_time(status, time.time())
                     self.pending[alert] = (captured, jpeg)
                 captured, jpeg = self.pending[alert]

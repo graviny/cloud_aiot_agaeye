@@ -92,7 +92,7 @@ public class AlertPhotos {
         return p("accepted",true);
     }
 
-    private void validateJpeg(byte[] jpeg) {
+    static void validateJpeg(byte[] jpeg) {
         if (jpeg.length > MAX_BYTES) throw new ApiException(413,"PHOTO_TOO_LARGE","사진 크기 제한을 초과했어요.");
         if (jpeg.length<4 || jpeg[0]!=(byte)0xff || jpeg[1]!=(byte)0xd8 || jpeg[jpeg.length-2]!=(byte)0xff || jpeg[jpeg.length-1]!=(byte)0xd9)
             throw ApiException.invalid("INVALID_JPEG");

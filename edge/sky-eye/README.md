@@ -2,7 +2,7 @@
 
 팀이 파이에 설치한 `sky-eye-integrated-20261101` 배포본에서 아가아이에 쓰는 카메라 추론과 자세·침대 경계 판정 코드를 가져왔습니다. 원본 라이선스는 [LICENSE](LICENSE)에 있습니다.
 
-카메라 프레임 → `sky_edge.runtime` 자세·위험 판정 → `sky_edge.export` 상태·이벤트 파일 → [아가아이 전송기](../../backend/raspberry-pi/README.md) → 백엔드 순서로 동작합니다. 전송기는 서버에 새 알림이 생기면 파이 내부의 `/frame.jpg`에서 JPEG 한 장을 요청합니다.
+카메라 프레임 → `sky_edge.runtime` 자세·위험 판정 → `sky_edge.export` 상태·이벤트 파일 → [아가아이 전송기](../../backend/raspberry-pi/README.md) → 백엔드 순서로 동작합니다. 전송기는 알림 사진과 선택적으로 설정한 주기 캡처에 파이 내부의 `/frame.jpg`를 사용합니다. 해당 응답에는 JPEG와 같은 프레임의 촬영 시각과 자세 판정이 함께 포함됩니다.
 
 ## 파이에서 설치하고 연결하기
 

@@ -423,6 +423,51 @@ class ApiIntegrationTest {
         return post("/api/v1/device/alerts/"+alert+"/photo").header("X-Device-Token",token)
                 .header("X-Frame-Captured-At",at.toString()).contentType("image/jpeg").content(bytes);
     }
+    private MockHttpServletRequestBuilder uploadCapture(String token, Instant at, String state, byte[] jpeg) {
+        return post("/api/v1/device/sky-eye/capture").header("X-Device-Token",token)
+                .header("X-Frame-Captured-At",at.toString()).header("X-Frame-State",state)
+                .contentType("image/jpeg").content(jpeg);
+    }
+    @Test void periodicCaptureKeepsLatestImageAndItsAnalysisInsideThePairedChild() throws Exception {
+        var owner=user(); var outsider=user(); UUID child=uuid(child(owner),"id"),other=uuid(child(owner),"id");
+        var pi=pi(); approve(owner,child,pi,"camera",200); var credential=poll(pi,200);
+        String token=credential.path("accessToken").asText(),device=credential.path("deviceId").asText();
+        String path="/api/v1/children/"+child+"/devices/"+device+"/capture";
+        var caregiver=get(path).header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace());
+        response(caregiver,204);
+        Instant at=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        byte[] jpeg=jpeg();
+        response(uploadCapture("bad-token",at,"normal",jpeg),401);
+        response(uploadCapture(token,at.minusSeconds(60),"normal",jpeg),422);
+        response(uploadCapture(token,at,"invalid",jpeg),422);
+        response(uploadCapture(token,at,"unavailable",jpeg).header("X-Frame-Posture","prone"),422);
+        response(uploadCapture(token,at,"normal",new byte[4]),422);
+        response(uploadCapture(token,at,"normal",new byte[524289]),413);
+        assertThat(response(uploadCapture(token,at.minusSeconds(2),"unavailable",jpeg),200).path("stored").asBoolean()).isTrue();
+        var unavailable=mvc.perform(caregiver).andReturn().getResponse();
+        assertThat(unavailable.getHeader("X-Frame-State")).isEqualTo("unavailable");
+        assertThat(unavailable.getHeader("X-Frame-Posture")).isNull();
+        var risk=uploadCapture(token,at,"risk",jpeg).header("X-Frame-Posture","prone").header("X-Frame-Airway","airway_covered");
+        assertThat(response(risk,200).path("stored").asBoolean()).isTrue();
+        assertThat(response(risk,200).path("stored").asBoolean()).isFalse();
+        assertThat(response(uploadCapture(token,at.minusSeconds(1),"normal",jpeg),200).path("stored").asBoolean()).isFalse();
+        var saved=mvc.perform(caregiver).andReturn().getResponse();
+        assertThat(saved.getContentAsByteArray()).isEqualTo(jpeg);
+        assertThat(saved.getHeader("X-Frame-Captured-At")).isEqualTo(at.toString());
+        assertThat(saved.getHeader("X-Frame-State")).isEqualTo("risk");
+        assertThat(saved.getHeader("X-Frame-Posture")).isEqualTo("prone");
+        assertThat(saved.getHeader("X-Frame-Airway")).isEqualTo("airway_covered");
+        assertThat(saved.getHeader("Cache-Control")).contains("no-store");
+        assertThat(db.list("SELECT device_id FROM sky_eye_latest_captures",Map.of())).hasSize(1);
+        assertThat(db.list("SELECT id FROM sky_eye_alerts",Map.of())).isEmpty();
+        response(get(path),401);
+        response(get(path).header("Authorization","Bearer "+outsider.token()).header("X-Workspace-Id",outsider.workspace()),404);
+        response(get(path.replace(child.toString(),other.toString())).header("Authorization","Bearer "+owner.token()).header("X-Workspace-Id",owner.workspace()),404);
+        call("DELETE","/devices/"+device,owner,null,200);
+        response(caregiver,404);
+        response(uploadCapture(token,at,"normal",jpeg),401);
+        assertThat(db.list("SELECT device_id FROM sky_eye_latest_captures",Map.of())).isEmpty();
+    }
     private JsonNode risk(String token,String key,String type,Instant at) throws Exception {
         return deviceCall("/sky-eye/events",token,p("id",key.repeat(64),"episodeKey",key,"kind","risk_started","riskType",type,"observedAt",at),200);
     }

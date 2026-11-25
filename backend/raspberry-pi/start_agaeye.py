@@ -60,7 +60,11 @@ def resolve_settings(args, config, environ):
     port = args.preview_port or config.get('preview_port', 8765)
     if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('The preview port is invalid.')
-    return dict(api_url=address, state_dir=str(state), sky_eye_dir=str(root), preview_port=port)
+    interval = args.capture_interval if args.capture_interval is not None else config.get('capture_interval', 0)
+    if type(interval) is not int or interval < 0:
+        raise ValueError('Capture interval must be zero or a positive number of seconds.')
+    return dict(api_url=address, state_dir=str(state), sky_eye_dir=str(root), preview_port=port,
+                capture_interval=interval)
 
 
 def save_config(path, value):
@@ -148,10 +152,12 @@ def main():
     parser.add_argument('--state-dir')
     parser.add_argument('--sky-eye-dir')
     parser.add_argument('--preview-port', type=int)
+    parser.add_argument('--capture-interval', type=int, metavar='SECONDS',
+                        help='Upload the latest JPEG and analysis periodically (0 disables)')
     parser.add_argument('--config', default='~/.config/agaeye/launcher.json')
     parser.add_argument('--fresh-profile', action='store_true', help='After reassignment, back up old model records locally and start with an empty camera records')
     parser.add_argument('--no-start-model', action='store_true', help='Use a model that is already running separately')
-    parser.add_argument('--no-camera', action='store_true', help='Send analysis data without alert photos')
+    parser.add_argument('--no-camera', action='store_true', help='Send analysis data without photos')
     parser.add_argument('--once', action='store_true', help='Check the connection and send data once')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--install-service', action='store_true', help='Finish setup, enable startup after reboot and keep running in the background')
@@ -194,8 +200,11 @@ def main():
             if not args.no_start_model:
                 start_model(settings['sky_eye_dir'], camera=camera)
             if not args.install_service:
-                print('Sending observations. Photos are captured only for alerts.' + ('' if args.service else ' Keep this terminal open. Press Ctrl+C to stop.'), flush=True)
-                bridge.run(args.once, settings['preview_port'], not args.no_camera)
+                interval = settings['capture_interval']
+                photo_status = 'Photo uploads are disabled.' if args.no_camera else (
+                    'Periodic captures enabled (%ss).' % interval if interval else 'Alert photos enabled.')
+                print('Sending observations. ' + photo_status + ('' if args.service else ' Keep this terminal open. Press Ctrl+C to stop.'), flush=True)
+                bridge.run(args.once, settings['preview_port'], not args.no_camera, interval)
         if args.install_service:
             # The foreground process releases AgentLock before starting the daemon.
             background_service.install(Path(__file__), path, args.no_camera, args.no_start_model)

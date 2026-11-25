@@ -164,7 +164,7 @@ def run(config,args):
                               processing_fps=frames/max(time.monotonic()-started,1e-6),
                               risk_elapsed_s=pipeline.posture.elapsed(ts))
                 if preview:
-                    preview.publish(frame,result,frame_events)
+                    preview.publish(frame,result,ts)
                 temp=output/'status.pending'
                 dump(temp,result)
                 temp.replace(output/'status.json')

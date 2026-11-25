@@ -13,13 +13,23 @@ class LauncherTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.args = argparse.Namespace(api_url=None,state_dir=str(self.root / 'state'),sky_eye_dir=str(self.root / 'model'),preview_port=None)
+        self.args = argparse.Namespace(api_url=None,state_dir=str(self.root / 'state'),sky_eye_dir=str(self.root / 'model'),preview_port=None,capture_interval=None)
 
     def test_reuses_already_paired_server_without_prompt_or_environment(self):
         agent = Agent('http://192.168.0.8:8080', self.args.state_dir, allow_http=True)
         with patch('builtins.input', side_effect=AssertionError('Should not prompt')):
             settings = resolve_settings(self.args, {}, {})
         self.assertEqual(settings['api_url'], agent.api_url)
+
+    def test_capture_interval_is_opt_in_and_persists_across_service_restarts(self):
+        self.args.api_url = 'https://api.example'
+        self.assertEqual(resolve_settings(self.args, {}, {})['capture_interval'], 0)
+        self.assertEqual(resolve_settings(self.args, {'capture_interval': 15}, {})['capture_interval'], 15)
+        self.args.capture_interval = 0
+        self.assertEqual(resolve_settings(self.args, {'capture_interval': 15}, {})['capture_interval'], 0)
+        self.args.capture_interval = -1
+        with self.assertRaises(ValueError):
+            resolve_settings(self.args, {}, {})
 
     def test_address_normalization_and_different_server_does_not_steal_identity(self):
         self.assertEqual(origin('192.168.0.8'), 'http://192.168.0.8:8081')
@@ -79,7 +89,7 @@ class LauncherTests(unittest.TestCase):
         with patch('sys.argv', argv), patch('start_agaeye.health'), patch.object(Agent,'authenticate'), patch.object(Agent,'pair') as pair, patch('start_agaeye.Bridge') as bridge:
             self.assertEqual(main(),0)
         pair.assert_not_called(); bridge.return_value.bind.assert_called_once()
-        bridge.return_value.run.assert_called_once_with(True,8765,True)
+        bridge.return_value.run.assert_called_once_with(True,8765,True,0)
         self.assertEqual(json.loads(config.read_text())['api_url'],agent.api_url)
 
     def test_reassignment_archives_before_binding_or_starting_transmission(self):

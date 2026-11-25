@@ -12,6 +12,7 @@ import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
+from threading import Event, Thread
 from urllib.error import URLError
 
 from agaeye_device import Agent, ApiError, AgentLock, parse_time
@@ -189,16 +190,37 @@ class Bridge:
         self.agent.write('bridge-errors.json', (errors + [{'offset': offset, 'hash': hashlib.sha256(line).hexdigest(), 'reason': reason}])[-100:])
         print('Skipped an invalid model event; see bridge-errors.json.', flush=True)
 
-    def run(self, once=False, preview_port=8765, camera=True):
+    def run(self, once=False, preview_port=8765, camera=True, capture_interval=0):
         self.camera = AlertCamera(self.agent, preview_port) if camera else None
-        self._run(once)
+        if capture_interval < 0:
+            raise ValueError('Capture interval must be zero or a positive number of seconds.')
+        if self.camera and capture_interval and not once:
+            stop = Event()
+            worker = Thread(target=self.upload_captures, args=(capture_interval, stop))
+            try:
+                self._run(capture_worker=worker)
+            finally:
+                stop.set()
+                if worker.ident is not None:
+                    worker.join()
+        else:
+            self._run(once, capture_interval if self.camera else 0)
 
     def report(self, path, body):
         receipt = self.agent.request(path, body, device=True)
         if self.camera and receipt.get('captures'):
             self.camera.fulfill(receipt['captures'])
 
-    def _run(self, once=False):
+    def upload_captures(self, interval, stop):
+        while not stop.is_set():
+            started = time.monotonic()
+            try:
+                self.camera.capture_latest()
+            except (ApiError, OSError, ValueError) as error:
+                print('Periodic capture unavailable: %s' % error, flush=True)
+            stop.wait(max(0, interval - (time.monotonic() - started)))
+
+    def _run(self, once=False, capture_interval=0, capture_worker=None):
         self.agent.load_key()
         authenticated, delay = False, 3
         while True:
@@ -208,8 +230,13 @@ class Bridge:
                     self.bind()
                     authenticated = True
                 self.status()
+                if capture_worker and capture_worker.ident is None:
+                    capture_worker.start()
                 self.events()
                 if once:
+                    if capture_interval:
+                        self.camera.capture_latest()
+                        print('Sky Eye capture and analysis uploaded.')
                     print('Sky Eye camera status and event batch synchronized.')
                     return
                 delay = 3
@@ -239,14 +266,16 @@ def main():
     parser.add_argument('--allow-http', action='store_true')
     parser.add_argument('--once', action='store_true')
     parser.add_argument('--preview-port', type=int, default=8765)
-    parser.add_argument('--no-camera', action='store_true', help='Send observations only, without alert photos')
+    parser.add_argument('--capture-interval', type=int, default=0, metavar='SECONDS',
+                        help='Upload the latest JPEG and analysis periodically (0 disables)')
+    parser.add_argument('--no-camera', action='store_true', help='Send observations only, without photos')
     args = parser.parse_args()
     if not args.api_url:
         parser.error('--api-url or AGAEYE_API_URL is required')
     try:
         agent = Agent(args.api_url, args.state_dir, args.allow_http)
         with AgentLock(agent.state_dir):
-            Bridge(agent, args.sky_eye_dir).run(args.once, args.preview_port, not args.no_camera)
+            Bridge(agent, args.sky_eye_dir).run(args.once, args.preview_port, not args.no_camera, args.capture_interval)
     except KeyboardInterrupt:
         print('\nStopped. Cursor and device identity are saved.')
     except (ApiError, ValueError, OSError, URLError) as error:
