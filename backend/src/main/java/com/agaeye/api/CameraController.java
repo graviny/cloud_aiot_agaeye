@@ -32,6 +32,11 @@ public class CameraController {
         return jpegResponse().body(frame);
     }
 
+    @PostMapping("/children/{child}/devices/{device}/alerts/{alert}/acknowledgement")
+    Object acknowledge(@AuthenticationPrincipal Jwt jwt,@RequestHeader("X-Workspace-Id")UUID workspace,@PathVariable UUID child,@PathVariable UUID device,@PathVariable UUID alert) {
+        return relay.acknowledge(policy.actor(jwt,workspace),child,device,alert);
+    }
+
     @PostMapping(value="/device/sky-eye/capture",consumes="image/jpeg")
     Object uploadCapture(@RequestHeader(value="X-Device-Token",defaultValue="") String token,
                          @RequestHeader("X-Frame-Captured-At") String at,

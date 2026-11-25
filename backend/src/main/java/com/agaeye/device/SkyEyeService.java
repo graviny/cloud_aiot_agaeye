@@ -5,6 +5,7 @@ import com.agaeye.monitoring.MonitoringService;
 import com.agaeye.monitoring.AlertPhotos;
 import com.agaeye.security.Policy;
 import com.agaeye.security.Policy.Actor;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -25,14 +26,21 @@ public class SkyEyeService {
         @DecimalMin("0") @DecimalMax("1") Double bodyConfidence,
         @DecimalMin("0") @DecimalMax("1") Double faceConfidence,
         boolean geometryValid, @Pattern(regexp="monitoring|edge_approach|edge_departure_warning|unavailable") String fallState,
-        @DecimalMin("0") @DecimalMax("1000") Double fps) {}
+        @DecimalMin("0") @DecimalMax("1000") Double fps,
+        @Valid RiskElapsed riskElapsed) {}
+    /** Seconds each risk condition has lasted on the Pi. Shown as progress only; alerts come from Pi risk events. */
+    public record RiskElapsed(@DecimalMin("0") @DecimalMax("86400") Double prone,
+        @DecimalMin("0") @DecimalMax("86400") Double faceCovered) {}
     public record Status(@NotNull Instant observedAt,@NotNull @Valid Camera video) {}
     public record Event(@NotBlank @Pattern(regexp="[a-f0-9]{64}") String id,
         @NotBlank @Size(max=128) String episodeKey,
         @NotNull @Pattern(regexp="risk_started|risk_ended|risk_interrupted|status_changed|posture_changed") String kind,
         @Pattern(regexp="prone|face_covered|edge_departure_warning") String riskType,
         @NotNull Instant observedAt,Instant startedAt,Instant endedAt,UUID episodeUid,
-        @Pattern(regexp="quiet|input_gap|segment_limit|service_stopped|interrupted") String endReason) {}
+        @Pattern(regexp="quiet|input_gap|segment_limit|service_stopped|interrupted") String endReason,
+        // Omitted when absent so events stored before these fields existed still deduplicate.
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Pattern(regexp="supine|side|prone") String previousPosture,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Pattern(regexp="supine|side|prone") String currentPosture) {}
     private final Db db; private final PairingService pairing; private final Policy policy;
     private final MonitoringService monitoring; private final ObjectMapper mapper; private final AlertPhotos camera; private final int offlineAfter;
     public SkyEyeService(Db db,PairingService pairing,Policy policy,MonitoringService monitoring,ObjectMapper mapper,AlertPhotos camera,@Value("${app.offline-after-seconds:7}")int offlineAfter) {
@@ -47,7 +55,7 @@ public class SkyEyeService {
     private Status effective(Status source,Instant now) {
         var v=source.video();
         boolean video=fresh(source.observedAt(),now,8)&&v.available()&&fresh(v.observedAt(),now,5)&&!v.state().equals("unavailable");
-        return new Status(source.observedAt(),new Camera(video,v.observedAt(),video?v.posture():null,video?v.airway():null,video?v.state():"unavailable",video?v.bodyConfidence():null,video?v.faceConfidence():null,video&&v.geometryValid(),video&&v.geometryValid()?v.fallState():"unavailable",video?v.fps():null));
+        return new Status(source.observedAt(),new Camera(video,v.observedAt(),video?v.posture():null,video?v.airway():null,video?v.state():"unavailable",video?v.bodyConfidence():null,video?v.faceConfidence():null,video&&v.geometryValid(),video&&v.geometryValid()?v.fallState():"unavailable",video?v.fps():null,video?v.riskElapsed():null));
     }
     private Map<String,String> safety(Status status) {
         var safety=MonitoringService.unknownSafety();var v=status.video();
@@ -101,6 +109,10 @@ public class SkyEyeService {
             String level = field.equals("posture") || field.equals("face") ? "immediate" : "caution";
             camera.create(deviceId,field,level,body.observedAt());
         }
+        // The Pi ended the risk: no second alert is due for it after this time.
+        String ended = "prone".equals(body.riskType()) ? "posture" : "face_covered".equals(body.riskType()) ? "face" : null;
+        if (existing.isEmpty() && "risk_ended".equals(body.kind()) && ended != null)
+            camera.end(deviceId,ended,body.endedAt() != null ? body.endedAt() : body.observedAt());
         return p("accepted",true,"duplicate",existing.isPresent(),"captures",camera.awaitingCapture(deviceId));
     }
     public Object snapshot(Actor actor,UUID child) {
@@ -109,7 +121,7 @@ public class SkyEyeService {
         var items=new ArrayList<Map<String,Object>>();Instant now=Instant.now();
         for(var row:devices) {
             UUID device=id(row,"device_id");
-            var status=row.get("body")!=null?effective(mapper.convertValue(row.get("body"),Status.class),now):new Status(instant(row,"created_at"),new Camera(false,null,null,null,"unavailable",null,null,false,"unavailable",null));
+            var status=row.get("body")!=null?effective(mapper.convertValue(row.get("body"),Status.class),now):new Status(instant(row,"created_at"),new Camera(false,null,null,null,"unavailable",null,null,false,"unavailable",null,null));
             boolean connected=fresh(instant(row,"last_seen_at"),now,offlineAfter);
             String reportState=row.get("received_at")==null?(connected?"awaiting_model":"awaiting_sender"):!connected?"offline":!status.video().available()?"input_unavailable":"receiving";
             var events=db.list("SELECT body,received_at FROM sky_eye_events WHERE device_id=:device ORDER BY observed_at DESC,event_id LIMIT 30",p("device",device));

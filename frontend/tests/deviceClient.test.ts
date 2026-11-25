@@ -166,3 +166,16 @@ test('late refresh cannot restore a cleared login session', async context => {
   await refreshing; client.clear(); finishRefresh(response({ accessToken: 'late', refreshToken: 'late-refresh' }));
   await rejected; await client.workspaces();
 });
+test('alert acknowledgement is saved for the signed-in caregiver in the workspace', async context => {
+  const calls: { url: string; method?: string; workspace: string | null; auth: string | null }[] = [];
+  context.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    if (url.endsWith('/auth/login')) return response({ accessToken: 'token', refreshToken: 'r' });
+    const headers = new Headers(init.headers);
+    calls.push({ url, method: init.method, workspace: headers.get('X-Workspace-Id'), auth: headers.get('Authorization') });
+    return response({ id: 'alert-a', acknowledgedAt: '2026-11-25T00:00:10Z', duplicate: false });
+  });
+  const client = new DeviceClient(); await client.authenticate('login', 'test@example.test', 'password');
+  const saved = await client.acknowledgeAlert('space-a', 'child-a', 'device-a', 'alert-a');
+  assert.deepEqual(calls, [{ url: '/api/v1/children/child-a/devices/device-a/alerts/alert-a/acknowledgement', method: 'POST', workspace: 'space-a', auth: 'Bearer token' }]);
+  assert.equal(saved.acknowledgedAt, '2026-11-25T00:00:10Z');
+});
