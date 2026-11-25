@@ -1,12 +1,24 @@
 export type Safety = 'stable' | 'caution' | 'immediate' | 'unknown';
-export interface ModelEvent { id: string; episodeKey: string; kind: string; riskType: string | null; observedAt: string; episodeUid: string | null; endReason: string | null }
+export interface ModelEvent {
+  id: string; episodeKey: string; kind: string; riskType: string | null; observedAt: string; episodeUid: string | null; endReason: string | null;
+  previousPosture?: string | null; currentPosture?: string | null;
+}
 export interface CameraAlert {
   id: string;
   field: 'posture' | 'face' | 'edge' | 'observation';
   level: Exclude<Safety, 'stable'>;
   observedAt: string;
   capturedAt: string | null;
+  acknowledgedAt?: string | null;
+  endedAt?: string | null;
+  /** Set by the server when an immediate alert was neither acknowledged nor ended within 15 seconds. */
+  secondAlertAt?: string | null;
 }
+/** Seconds after which the Pi turns a lasting risk condition into an alert. */
+export const RISK_ALERT_SECONDS = 5;
+/** Seconds after an unacknowledged immediate alert before the server marks a second alert. */
+export const SECOND_ALERT_SECONDS = 15;
+export interface RiskElapsed { prone: number | null; faceCovered: number | null }
 export function alertLabel(alert: CameraAlert) {
   const field = { posture: '아기 자세', face: '얼굴 노출', edge: '가장자리 접근', observation: '기기 관측' }[alert.field];
   return field + ' · ' + safetyLabels[alert.level];
@@ -22,7 +34,7 @@ export interface SkyDevice {
   alerts?: CameraAlert[];
   status: {
     observedAt: string;
-    video: { available: boolean; observedAt: string | null; posture: string | null; airway: string | null; state: string; geometryValid: boolean; fallState: string | null; fps: number | null };
+    video: { available: boolean; observedAt: string | null; posture: string | null; airway: string | null; state: string; geometryValid: boolean; fallState: string | null; fps: number | null; riskElapsed?: RiskElapsed | null };
   };
   safety: Record<'posture' | 'face' | 'edge' | 'objects', Safety>;
   events: { event: ModelEvent; recent: boolean }[];
@@ -41,7 +53,24 @@ export function connectionLabel(device: Pick<SkyDevice, 'connected' | 'reportSta
 export function eventLabel(event: ModelEvent) {
   const risk = ({ prone: '엎드림', face_covered: '얼굴 가림', edge_departure_warning: '가장자리 접근' } as Record<string, string>)[event.riskType || ''] || '관측';
   const kind = ({ risk_started: '위험 의심 감지', risk_ended: '모델 위험 구간 종료', risk_interrupted: '관찰 중단', status_changed: '상태 변경', posture_changed: '자세 변경' } as Record<string, string>)[event.kind] || event.kind;
+  const from = frameDetails[event.previousPosture || ''], to = frameDetails[event.currentPosture || ''];
+  if (event.kind === 'posture_changed' && from && to) return `${from} → ${to} · ${kind}`;
   return `${risk} · ${kind}`;
+}
+/** The longest lasting risk condition on the Pi, shown before it becomes an alert. */
+export function riskProgress(device: Pick<SkyDevice, 'status'>) {
+  const video = device.status.video, elapsed = video.riskElapsed;
+  if (!video.available || !elapsed) return null;
+  // Under one second is usually a single uncertain frame, so it is not shown.
+  const lasting = [{ label: '엎드림', seconds: elapsed.prone }, { label: '얼굴 가림', seconds: elapsed.faceCovered }]
+    .flatMap(({ label, seconds }) => typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 1 ? [{ label, seconds: Math.floor(seconds) }] : []);
+  if (!lasting.length) return null;
+  const { label, seconds } = lasting.reduce((a, b) => (b.seconds > a.seconds ? b : a));
+  return { label, seconds, text: seconds < RISK_ALERT_SECONDS ? `${label} ${seconds}초째 · ${RISK_ALERT_SECONDS}초가 이어지면 알림` : `${label} ${seconds}초째 이어지는 중` };
+}
+/** Immediate alerts whose second alert is due and nobody has acknowledged yet, newest first. */
+export function pendingSecondAlerts(snapshot: SkySnapshot | null) {
+  return listAlerts(snapshot).filter(({ alert }) => alert.level === 'immediate' && !!alert.secondAlertAt && !alert.acknowledgedAt);
 }
 const frameStates: Record<string, { label: string; tone: string }> = {
   normal: { label: '관측 정상', tone: 'green' }, caution: { label: '확인 필요', tone: 'yellow' },

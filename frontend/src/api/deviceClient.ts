@@ -106,6 +106,9 @@ export class DeviceClient {
   unlink(workspace: string, device: string) { return this.request('DELETE', `/devices/${encodeURIComponent(device)}`, undefined, workspace); }
   skyEye(workspace: string, child: string) { return this.request<SkySnapshot>('GET', `/children/${encodeURIComponent(child)}/sky-eye`, undefined, workspace); }
   alertPhoto(workspace: string, child: string, device: string, alert: string) { return this.request<Blob | null>('GET', `/children/${encodeURIComponent(child)}/devices/${encodeURIComponent(device)}/alerts/${encodeURIComponent(alert)}/photo`, undefined, workspace, undefined, true, 'image'); }
+  acknowledgeAlert(workspace: string, child: string, device: string, alert: string) {
+    return this.request<{ id: string; acknowledgedAt: string; duplicate: boolean }>('POST', `/children/${encodeURIComponent(child)}/devices/${encodeURIComponent(device)}/alerts/${encodeURIComponent(alert)}/acknowledgement`, {}, workspace);
+  }
   async latestCapture(workspace: string, child: string, device: string): Promise<LatestCapture | null> {
     const frame = await this.request<{ image: Blob; headers: Headers } | null>('GET', `/children/${encodeURIComponent(child)}/devices/${encodeURIComponent(device)}/capture`, undefined, workspace, undefined, true, 'frame');
     if (!frame) return null;

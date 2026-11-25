@@ -1,7 +1,7 @@
 import { ShieldCheck } from 'lucide-react';
 import { Badge } from '../components';
 import { useApp } from '../context';
-import { safetyItems, safetyLabels, safetyTones, type Safety, type SkyDevice } from '../skyEye';
+import { riskProgress, safetyItems, safetyLabels, safetyTones, type Safety, type SkyDevice } from '../skyEye';
 
 export function CompactSleepSafety({ items }: { items: SkyDevice[] }) {
   const priority: Safety[] = ['immediate', 'caution', 'unknown', 'stable'];
@@ -14,6 +14,12 @@ export function CompactSleepSafety({ items }: { items: SkyDevice[] }) {
   })}</div>;
 }
 
+/** How long the current risk condition has lasted on the Pi, before it becomes an alert. */
+function RiskProgress({ device }: { device: SkyDevice }) {
+  const progress = riskProgress(device);
+  return progress ? <p className="risk-progress" role="status">{progress.text}</p> : null;
+}
+
 export function SkyEyeSafety({ compact = false }: { compact?: boolean }) {
   const { sky } = useApp();
   const items = sky.snapshot?.items || [];
@@ -23,6 +29,7 @@ export function SkyEyeSafety({ compact = false }: { compact?: boolean }) {
       const state = device?.safety[key] || 'unknown';
       return <div key={key} className={key === 'posture' && (state === 'immediate' || state === 'caution') ? 'posture-risk-highlight' : undefined}><span><ShieldCheck size={17}/>{label}</span><Badge tone={safetyTones[state]}>{safetyLabels[state]}</Badge></div>;
     })}</div>
+    {device && <RiskProgress device={device}/>}
     {device && !device.status.video.geometryValid && <p className="card-footnote">침대 영역 보정 전에는 가장자리 상태를 판단하지 않아요.</p>}
   </div>)}{sky.error && <p className="model-error" role="status">{sky.error}</p>}</>;
 }
