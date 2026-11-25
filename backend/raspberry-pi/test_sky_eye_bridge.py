@@ -43,6 +43,24 @@ class MappingTests(unittest.TestCase):
         self.assertNotIn('audio', map_status(source, now))
 
 
+    def test_risk_elapsed_time_is_forwarded_only_for_a_fresh_observation(self):
+        now = time.time(); source = status(now)
+        source['video']['data']['risk_elapsed_s'] = {'prone': 3.2, 'face_covered': 0.0}
+        self.assertEqual(map_status(source, now)['video']['riskElapsed'], {'prone': 3.2, 'faceCovered': 0.0})
+        source['video']['data']['risk_elapsed_s'] = {'prone': -1, 'face_covered': 'x'}
+        self.assertEqual(map_status(source, now)['video']['riskElapsed'], {'prone': None, 'faceCovered': None})
+        self.assertIsNone(map_status(source, now + 10)['video']['riskElapsed'])
+
+    def test_posture_change_carries_both_postures_and_other_events_keep_their_shape(self):
+        now = time.time(); source = event(now)
+        self.assertNotIn('previousPosture', map_event(source))
+        source['kind'] = 'posture_changed'
+        source['payload'] = {'branch': 'posture', 'ts': 105, 'previous': 'supine', 'current': 'side'}
+        change = map_event(source)
+        self.assertEqual((change['previousPosture'], change['currentPosture']), ('supine', 'side'))
+        source['payload']['current'] = 'upside_down'
+        self.assertIsNone(map_event(source)['currentPosture'])
+
     def test_cry_events_are_ignored_even_from_legacy_model_output(self):
         source = event(time.time())
         for kind in ('cry_started', 'cry_ended', 'cry_candidate_started', 'cry_episode_ended'):

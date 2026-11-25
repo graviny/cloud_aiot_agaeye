@@ -58,6 +58,7 @@ def map_status(raw, now):
     video_ok = root_fresh and video.get('available') is True and fresh(v.get('wall_time_unix'), now, 3) and not v.get('error')
     posture, fall = obj(v.get('posture')), obj(v.get('fall'))
     video_ok = bool(video_ok and posture.get('valid') is True and v.get('posture_state') != 'unavailable')
+    elapsed = obj(v.get('risk_elapsed_s'))
     result = {
         'observedAt': timestamp(raw['wall_time_unix']) if root_fresh else timestamp(now),
         'video': {'available': video_ok, 'observedAt': timestamp(v.get('wall_time_unix')) if video_ok else None,
@@ -68,7 +69,10 @@ def map_status(raw, now):
                   'faceConfidence': number(obj(posture.get('face')).get('conf'), 0, 1),
                   'geometryValid': v.get('geometry_valid') is True and fall.get('observation_valid') is True,
                   'fallState': choice(fall.get('state'), ('monitoring', 'edge_approach', 'edge_departure_warning', 'unavailable'), 'unavailable'),
-                  'fps': number(v.get('processing_fps'), 0, 1000)},
+                  'fps': number(v.get('processing_fps'), 0, 1000),
+                  # How long each risk condition has lasted on the Pi, so the web can show progress toward the alert.
+                  'riskElapsed': {'prone': number(elapsed.get('prone'), 0, 86400),
+                                  'faceCovered': number(elapsed.get('face_covered'), 0, 86400)} if video_ok else None},
     }
     return result
 
@@ -104,10 +108,15 @@ def map_event(raw):
         if value is None:
             return None
         return timestamp(at + value - anchor) if anchor is not None else None
-    return {'id': raw['id'], 'episodeKey': episode_key, 'kind': kind,
-            'riskType': choice(p.get('risk_type'), ('prone', 'face_covered', 'edge_departure_warning')),
-            'observedAt': timestamp(at), 'startedAt': converted('started_at'), 'endedAt': converted('ended_at'),
-            'episodeUid': uid, 'endReason': choice(p.get('end_reason'), ('quiet', 'input_gap', 'segment_limit', 'service_stopped'))}
+    result = {'id': raw['id'], 'episodeKey': episode_key, 'kind': kind,
+              'riskType': choice(p.get('risk_type'), ('prone', 'face_covered', 'edge_departure_warning')),
+              'observedAt': timestamp(at), 'startedAt': converted('started_at'), 'endedAt': converted('ended_at'),
+              'episodeUid': uid, 'endReason': choice(p.get('end_reason'), ('quiet', 'input_gap', 'segment_limit', 'service_stopped'))}
+    if kind == 'posture_changed':
+        # Only posture changes carry these keys, so other events keep their previous body for deduplication.
+        result['previousPosture'] = choice(p.get('previous'), ('supine', 'side', 'prone'))
+        result['currentPosture'] = choice(p.get('current'), ('supine', 'side', 'prone'))
+    return result
 
 
 class Bridge:

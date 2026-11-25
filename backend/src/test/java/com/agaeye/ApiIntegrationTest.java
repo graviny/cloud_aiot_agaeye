@@ -523,6 +523,32 @@ class ApiIntegrationTest {
         assertThat(db.list("SELECT id FROM sky_eye_alerts WHERE level='immediate' AND field='posture'",Map.of())).hasSize(2);
     }
 
+    @Test void statusCarriesRiskProgressAndPostureChangesKeepBothPostures() throws Exception {
+        var owner=user(); UUID child=uuid(child(owner),"id"); var pi=pi(); approve(owner,child,pi,"camera",200);
+        String token=poll(pi,200).path("accessToken").asText();
+        Instant at=Instant.now();
+        var status=p("observedAt",at,"video",p("available",true,"observedAt",at,"posture","prone","airway","airway_visible","state","caution",
+                "bodyConfidence",0.9,"faceConfidence",0.2,"geometryValid",false,"fallState","monitoring","riskElapsed",p("prone",3.2,"faceCovered",0.0)));
+        deviceCall("/sky-eye/status",token,status,200);
+        var item=call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0);
+        assertThat(item.path("status").path("video").path("riskElapsed").path("prone").asDouble()).isEqualTo(3.2);
+        assertThat(item.path("alerts")).isEmpty();
+        var invalid=p("observedAt",at.plusMillis(1),"video",p("available",true,"observedAt",at,"state","caution","riskElapsed",p("prone",-1)));
+        deviceCall("/sky-eye/status",token,invalid,422);
+
+        risk(token,"a","prone",at);
+        deviceCall("/sky-eye/events",token,p("id","b".repeat(64),"episodeKey","b","kind","posture_changed","observedAt",at.plusMillis(1),
+                "previousPosture","supine","currentPosture","side"),200);
+        deviceCall("/sky-eye/events",token,p("id","c".repeat(64),"episodeKey","c","kind","posture_changed","observedAt",at,
+                "currentPosture","upside_down"),422);
+        var events=call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0).path("events");
+        assertThat(events.get(0).path("event").path("previousPosture").asText()).isEqualTo("supine");
+        assertThat(events.get(0).path("event").path("currentPosture").asText()).isEqualTo("side");
+        assertThat(events.get(1).path("event").has("previousPosture")).isFalse();
+        // Events stored without the new keys still deduplicate against the same resend.
+        assertThat(risk(token,"a","prone",at).path("duplicate").asBoolean()).isTrue();
+    }
+
     @Test void unknownPostureWaitsForContinuousObservationsAndNeverUsesAnotherAlertsImage() throws Exception {
         var owner=user(); UUID child=uuid(child(owner),"id"); var pi=pi(); approve(owner,child,pi,"camera",200);
         String token=poll(pi,200).path("accessToken").asText();
