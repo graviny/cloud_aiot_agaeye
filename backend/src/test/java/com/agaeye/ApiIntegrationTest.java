@@ -523,6 +523,38 @@ class ApiIntegrationTest {
         assertThat(db.list("SELECT id FROM sky_eye_alerts WHERE level='immediate' AND field='posture'",Map.of())).hasSize(2);
     }
 
+    @Test void unacknowledgedRiskGetsASecondAlertUnlessItEndedOrWasAcknowledgedInTime() throws Exception {
+        var owner=user(); var outsider=user(); UUID child=uuid(child(owner),"id"); var pi=pi(); approve(owner,child,pi,"camera",200);
+        var c=poll(pi,200); String token=c.path("accessToken").asText(), device=c.path("deviceId").asText();
+        Instant past=Instant.now().minusSeconds(25);
+        risk(token,"a","prone",past);
+        risk(token,"b","face_covered",past);
+        deviceCall("/sky-eye/events",token,p("id","c".repeat(64),"episodeKey","b","kind","risk_ended","riskType","face_covered",
+                "observedAt",past.plusSeconds(5),"endedAt",past.plusSeconds(5)),200);
+        risk(token,"d","prone",Instant.now());
+        String ignored=db.required("SELECT id FROM sky_eye_alerts WHERE field='posture' AND observed_at < now()-interval '20 seconds'",Map.of(),"missing").get("id").toString();
+        String ended=db.required("SELECT id FROM sky_eye_alerts WHERE field='face'",Map.of(),"missing").get("id").toString();
+        String recent=db.required("SELECT id FROM sky_eye_alerts WHERE field='posture' AND observed_at > now()-interval '10 seconds'",Map.of(),"missing").get("id").toString();
+        var alerts=alertsById(owner,child);
+        assertThat(alerts.get(ignored).path("secondAlertAt").isNull()).isFalse();
+        assertThat(alerts.get(ended).path("secondAlertAt").isNull()).isTrue();
+        assertThat(alerts.get(recent).path("secondAlertAt").isNull()).isTrue();
+
+        String path="/children/"+child+"/devices/"+device+"/alerts/"+ignored+"/acknowledgement";
+        call("POST",path,outsider,Map.of(),404);
+        assertThat(call("POST",path,owner,Map.of(),200).path("duplicate").asBoolean()).isFalse();
+        assertThat(call("POST",path,owner,Map.of(),200).path("duplicate").asBoolean()).isTrue();
+        // Acknowledging after the second alert keeps the record that it was sent.
+        var acknowledged=alertsById(owner,child).get(ignored);
+        assertThat(acknowledged.path("acknowledgedAt").isNull()).isFalse();
+        assertThat(acknowledged.path("secondAlertAt").isNull()).isFalse();
+
+        call("POST","/children/"+child+"/devices/"+device+"/alerts/"+recent+"/acknowledgement",owner,Map.of(),200);
+        // Replay an acknowledgement 10 seconds after the alert, then let the second-alert time pass.
+        db.update("UPDATE sky_eye_alerts SET observed_at=observed_at-interval '20 seconds', acknowledged_at=observed_at-interval '10 seconds' WHERE id=cast(:id as uuid)",p("id",recent));
+        assertThat(alertsById(owner,child).get(recent).path("secondAlertAt").isNull()).isTrue();
+    }
+
     @Test void statusCarriesRiskProgressAndPostureChangesKeepBothPostures() throws Exception {
         var owner=user(); UUID child=uuid(child(owner),"id"); var pi=pi(); approve(owner,child,pi,"camera",200);
         String token=poll(pi,200).path("accessToken").asText();
@@ -547,6 +579,12 @@ class ApiIntegrationTest {
         assertThat(events.get(1).path("event").has("previousPosture")).isFalse();
         // Events stored without the new keys still deduplicate against the same resend.
         assertThat(risk(token,"a","prone",at).path("duplicate").asBoolean()).isTrue();
+    }
+    private Map<String,JsonNode> alertsById(User owner,UUID child) throws Exception {
+        var result=new HashMap<String,JsonNode>();
+        for (var alert : call("GET","/children/"+child+"/sky-eye",owner,null,200).path("items").get(0).path("alerts"))
+            result.put(alert.path("id").asText(),alert);
+        return result;
     }
 
     @Test void unknownPostureWaitsForContinuousObservationsAndNeverUsesAnotherAlertsImage() throws Exception {

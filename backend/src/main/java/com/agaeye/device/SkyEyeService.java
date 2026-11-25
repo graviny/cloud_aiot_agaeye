@@ -109,6 +109,10 @@ public class SkyEyeService {
             String level = field.equals("posture") || field.equals("face") ? "immediate" : "caution";
             camera.create(deviceId,field,level,body.observedAt());
         }
+        // The Pi ended the risk: no second alert is due for it after this time.
+        String ended = "prone".equals(body.riskType()) ? "posture" : "face_covered".equals(body.riskType()) ? "face" : null;
+        if (existing.isEmpty() && "risk_ended".equals(body.kind()) && ended != null)
+            camera.end(deviceId,ended,body.endedAt() != null ? body.endedAt() : body.observedAt());
         return p("accepted",true,"duplicate",existing.isPresent(),"captures",camera.awaitingCapture(deviceId));
     }
     public Object snapshot(Actor actor,UUID child) {

@@ -21,6 +21,8 @@ import static com.agaeye.common.Db.*;
 @Service
 public class AlertPhotos {
     public static final int MAX_BYTES = 524288;
+    /** A second alert follows an unacknowledged immediate alert after this many seconds. */
+    public static final int SECOND_ALERT_SECONDS = 15;
     private final Db db;
     private final PairingService pairing;
     private final Policy policy;
@@ -71,11 +73,40 @@ public class AlertPhotos {
             """,p("device",device));
     }
 
+    /** Marks the open alert for this condition as ended when the Pi reports that the risk cleared. */
+    public void end(UUID device, String field, Instant at) {
+        db.update("""
+            UPDATE sky_eye_alerts SET ended_at=:at
+            WHERE device_id=:device AND field=:field AND level='immediate' AND ended_at IS NULL AND observed_at<=:at
+            """,p("device",device,"field",field,"at",at.truncatedTo(java.time.temporal.ChronoUnit.MICROS)));
+    }
+
+    // secondAlertAt is derived from stored times: an immediate alert that was neither acknowledged
+    // nor ended within SECOND_ALERT_SECONDS gets a second alert at that moment.
     public List<Map<String,Object>> recentAlerts(UUID device) {
         return db.list("""
-            SELECT id, field, level, observed_at AS "observedAt", captured_at AS "capturedAt"
+            SELECT id, field, level, observed_at AS "observedAt", captured_at AS "capturedAt",
+                   acknowledged_at AS "acknowledgedAt", ended_at AS "endedAt",
+                   CASE WHEN level='immediate' AND now() >= observed_at + make_interval(secs => :delay)
+                             AND (acknowledged_at IS NULL OR acknowledged_at > observed_at + make_interval(secs => :delay))
+                             AND (ended_at IS NULL OR ended_at > observed_at + make_interval(secs => :delay))
+                        THEN observed_at + make_interval(secs => :delay) END AS "secondAlertAt"
             FROM sky_eye_alerts WHERE device_id=:device ORDER BY observed_at DESC,id LIMIT 30
-            """,p("device",device));
+            """,p("device",device,"delay",SECOND_ALERT_SECONDS));
+    }
+
+    @Transactional public Object acknowledge(Policy.Actor actor, UUID child, UUID device, UUID alert) {
+        policy.require(actor,child,"detection:ack");
+        var args = p("alert",alert,"device",device,"child",child,"ws",actor.workspaceId(),"member",actor.membershipId());
+        var row = db.required("""
+            SELECT a.acknowledged_at FROM sky_eye_alerts a JOIN devices d ON d.id=a.device_id
+            WHERE a.id=:alert AND d.id=:device AND d.child_id=:child AND d.workspace_id=:ws
+              AND d.revoked_at IS NULL FOR UPDATE OF a
+            """,args,"ALERT_NOT_FOUND");
+        if (row.get("acknowledged_at") == null)
+            db.update("UPDATE sky_eye_alerts SET acknowledged_at=now(), acknowledged_by=:member WHERE id=:alert",args);
+        var saved = db.required("SELECT acknowledged_at FROM sky_eye_alerts WHERE id=:alert",args,"ALERT_NOT_FOUND");
+        return p("id",alert,"acknowledgedAt",saved.get("acknowledged_at"),"duplicate",row.get("acknowledged_at") != null);
     }
 
     @Transactional public Object upload(String token, UUID alert, Instant captured, byte[] jpeg) {
