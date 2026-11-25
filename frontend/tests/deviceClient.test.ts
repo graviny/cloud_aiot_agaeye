@@ -53,6 +53,25 @@ test('missing photos stay empty and HTML is rejected', async context => {
   await assert.rejects(client.alertPhoto('space', 'child', 'device', 'alert-a'), /사진 형식/);
 });
 
+test('latest capture returns the frame with its own analysis headers', async context => {
+  const fetch = context.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    const headers = new Headers(init.headers);
+    assert.equal(url, '/api/v1/children/child-a/devices/device-a/capture');
+    assert.equal(headers.get('X-Workspace-Id'), 'space-a'); assert.equal(headers.get('Accept'), 'image/jpeg');
+    return new Response(new Uint8Array([255,216,255,217]), { headers: { 'Content-Type': 'image/jpeg',
+      'X-Frame-Captured-At': '2026-11-24T12:00:00Z', 'X-Frame-State': 'risk', 'X-Frame-Posture': 'prone' } });
+  });
+  const client = new DeviceClient();
+  const capture = await client.latestCapture('space-a', 'child-a', 'device-a');
+  assert.equal(capture?.image.size, 4);
+  assert.deepEqual({ ...capture, image: undefined }, { image: undefined, capturedAt: '2026-11-24T12:00:00Z', state: 'risk', posture: 'prone', airway: null });
+  fetch.mock.mockImplementation(async () => new Response(null, { status: 204 }));
+  assert.equal(await client.latestCapture('space-a', 'child-a', 'device-a'), null);
+  fetch.mock.mockImplementation(async () => new Response(new Uint8Array([255,216,255,217]), { headers: { 'Content-Type': 'image/jpeg', 'X-Frame-State': 'normal' } }));
+  await assert.rejects(client.latestCapture('space-a', 'child-a', 'device-a'), /촬영 시각/);
+  fetch.mock.mockImplementation(async () => response({ error: { code: 'NOT_FOUND' } }, 404));
+  await assert.rejects(client.latestCapture('space-a', 'child-a', 'device-a'), (error: unknown) => error instanceof ApiError && error.status === 404);
+});
 test('login accepts origin or API base without duplicating /api/v1', async context => {
   const urls: string[] = [];
   context.mock.method(globalThis, 'fetch', async (url: string) => { urls.push(url); return response({ accessToken: 'a', refreshToken: 'r' }); });

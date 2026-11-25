@@ -5,6 +5,8 @@ export interface Workspace { id: string; name: string; role: string; type: strin
 export interface Child { id: string; displayName: string; birthDate: string; capabilities: string[] }
 export interface Device { id: string; name: string; childId: string; connected: boolean; state: string; lastSeenAt: string | null; pairedAt: string; fingerprint: string; canManage: boolean }
 export interface Pairing { pairingId: string; status: string; expiresAt: string; fingerprint: string }
+/** Latest periodic camera frame; the analysis fields describe that exact frame. */
+export interface LatestCapture { image: Blob; capturedAt: string; state: string; posture: string | null; airway: string | null }
 export function normalizeApiBaseUrl(value: string) {
   // Accept either an origin or the API base copied from the backend documentation.
   return value.trim().replace(/\/+$/, '').replace(/\/api(?:\/v1)?$/, '');
@@ -53,9 +55,9 @@ export class DeviceClient {
     }
     return this.refreshing;
   }
-  async request<T>(method: string, path: string, body?: unknown, workspace?: string, key?: string, retry = true, format: 'json' | 'image' = 'json'): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown, workspace?: string, key?: string, retry = true, format: 'json' | 'image' | 'frame' = 'json'): Promise<T> {
     const generation = this.generation;
-    const headers = new Headers({ Accept: format === 'image' ? 'image/jpeg' : 'application/json' });
+    const headers = new Headers({ Accept: format === 'json' ? 'application/json' : 'image/jpeg' });
     if (body !== undefined) headers.set('Content-Type', 'application/json');
     const access = this.session?.accessToken;
     if (access) headers.set('Authorization', `Bearer ${access}`);
@@ -70,10 +72,11 @@ export class DeviceClient {
       if (access === this.session.accessToken) await this.refresh();
       return this.request<T>(method, path, body, workspace, key, false, format);
     }
-    if (response.ok && format === 'image') {
+    if (response.ok && format !== 'json') {
       if (response.status === 204) return null as T;
       if (!response.headers.get('content-type')?.startsWith('image/jpeg')) throw new Error('알림 사진 형식을 확인할 수 없어요.');
-      return await response.blob() as T;
+      const image = await response.blob();
+      return (format === 'frame' ? { image, headers: response.headers } : image) as T;
     }
     const data = await response.json().catch(() => null);
     if (generation !== this.generation) throw new ApiError(401, 'SESSION_CHANGED', '로그인 계정이 변경됐어요.');
@@ -103,6 +106,14 @@ export class DeviceClient {
   unlink(workspace: string, device: string) { return this.request('DELETE', `/devices/${encodeURIComponent(device)}`, undefined, workspace); }
   skyEye(workspace: string, child: string) { return this.request<SkySnapshot>('GET', `/children/${encodeURIComponent(child)}/sky-eye`, undefined, workspace); }
   alertPhoto(workspace: string, child: string, device: string, alert: string) { return this.request<Blob | null>('GET', `/children/${encodeURIComponent(child)}/devices/${encodeURIComponent(device)}/alerts/${encodeURIComponent(alert)}/photo`, undefined, workspace, undefined, true, 'image'); }
+  async latestCapture(workspace: string, child: string, device: string): Promise<LatestCapture | null> {
+    const frame = await this.request<{ image: Blob; headers: Headers } | null>('GET', `/children/${encodeURIComponent(child)}/devices/${encodeURIComponent(device)}/capture`, undefined, workspace, undefined, true, 'frame');
+    if (!frame) return null;
+    const capturedAt = frame.headers.get('X-Frame-Captured-At'), state = frame.headers.get('X-Frame-State');
+    // Without its capture time a frame could be mistaken for the current scene.
+    if (!capturedAt || !Number.isFinite(Date.parse(capturedAt)) || !state) throw new Error('사진의 촬영 시각을 확인할 수 없어요.');
+    return { image: frame.image, capturedAt, state, posture: frame.headers.get('X-Frame-Posture'), airway: frame.headers.get('X-Frame-Airway') };
+  }
   careHistory<T>(workspace: string, child: string, kind: HistoryKind, cursor: string | null = null) {
     const query = new URLSearchParams({ kind, limit: '100' }); if (cursor) query.set('cursor', cursor);
     return this.request<{ items: T[]; nextCursor: string | null }>('GET', `/children/${encodeURIComponent(child)}/care-history?${query}`, undefined, workspace);

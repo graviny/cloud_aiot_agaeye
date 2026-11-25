@@ -19,3 +19,4 @@ credential.json
 local-secrets.json
 .DS_Store
 Thumbs.db
+models/

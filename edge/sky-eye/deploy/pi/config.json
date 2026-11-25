@@ -11,7 +11,7 @@
   "minimum_brightness": 0.03,
   "posture_stable_s": 1.0,
   "target_fps": 5,
-  "camera_backend": "opencv",
+  "camera_backend": "picamera2",
   "camera_source": 0,
   "camera_index": 0,
   "frame_size": [
@@ -27,7 +27,7 @@
     "gap_tolerance_s": 1,
     "miss_tolerance_s": 1
   },
-  "inference_backend": "ncnn",
+  "inference_backend": "onnxruntime",
   "camera_warmup_s": 2.0,
   "preview_port": 8765
 }

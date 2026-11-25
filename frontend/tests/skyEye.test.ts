@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { connectionLabel, currentSnapshot, listAlerts, eventLabel, type SkySnapshot } from '../src/skyEye.ts';
+import { captureSummary, connectionLabel, currentSnapshot, listAlerts, eventLabel, type SkySnapshot } from '../src/skyEye.ts';
 
 function fixture(): SkySnapshot {
   const at = '2026-11-01T00:00:00Z';
@@ -31,4 +31,9 @@ test('alerts retain their own photo and capture time after inference expires', (
   ];
   const results = listAlerts(currentSnapshot(snapshot, 0, 60000));
   assert.deepEqual(results.map(({ alert }) => [alert.id, alert.capturedAt]), [['newer', null], ['older', snapshot.serverTime]]);
+});
+test('periodic capture results describe that frame and unknown states are not reported as normal', () => {
+  assert.deepEqual(captureSummary({ state: 'risk', posture: 'prone', airway: 'airway_covered' }), { label: '위험 의심', tone: 'red', details: '엎드림 · 코·입 가림' });
+  assert.deepEqual(captureSummary({ state: 'normal', posture: 'supine', airway: null }), { label: '관측 정상', tone: 'green', details: '바로 누움' });
+  assert.deepEqual(captureSummary({ state: 'unexpected', posture: null, airway: null }), { label: '판정 불가', tone: 'gray', details: '' });
 });
