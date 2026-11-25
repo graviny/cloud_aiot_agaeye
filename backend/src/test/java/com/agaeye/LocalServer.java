@@ -1,0 +1,18 @@
+package com.agaeye;
+
+import org.springframework.boot.SpringApplication;
+import java.nio.file.*;
+import java.util.Map;
+
+/** Development launcher only. Never included in the production JAR. */
+public class LocalServer {
+    public static void main(String[] args)throws Exception{
+        Path data=Path.of("data","postgres").toAbsolutePath();Files.createDirectories(data);
+        var postgres=LocalPostgres.builder().setDataDirectory(data).setCleanDataDirectory(false).start();
+        System.setProperty("spring.datasource.url",postgres.getJdbcUrl("postgres","postgres"));
+        System.setProperty("spring.datasource.username","postgres");System.setProperty("spring.datasource.password","");
+        String address=Boolean.parseBoolean(System.getenv("AGAEYE_LOCAL_LAN"))?"0.0.0.0":"127.0.0.1";
+        System.setProperty("server.address",address);System.setProperty("app.environment","development");System.setProperty("app.mail-mode","local");
+        var app=new SpringApplication(AgaeyeApplication.class);app.setDefaultProperties(Map.of("server.port",8081));app.run(args);
+    }
+}
